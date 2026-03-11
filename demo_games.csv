@@ -51,8 +51,9 @@ Wolves,21,Sharks,17
 Bobcats,35,Cougars,21
 Mustangs,28,Bobcats,14
 Mustangs,24,Cougars,17
-Lone Wolf,35,Rams,28
+Lone Wolf,35,Zephyrs,14
 Aces,45,Lone Wolf,17
-Road Runner,14,Bears,31
-Road Runner,21,Spartans,28
-Trailblazer,31,Lions,24
+Road Runner,35,Sharks,17
+Bears,31,Road Runner,14
+Trailblazer,28,Cougars,14
+Lions,21,Trailblazer,14

@@ -175,16 +175,18 @@ class TestCyclicThreeWayTie(unittest.TestCase):
         self.assertEqual(names, ["C", "B", "A"])
 
 
-class TestMultipleGroupTiers(unittest.TestCase):
+class TestCrossCliqueNoSharedGroup(unittest.TestCase):
     """
-    Teams from a larger round-robin group always outrank teams from a
-    smaller group, even if the smaller group's teams have better records.
+    When teams from different cliques share no common clique they are
+    compared by overall (all-games) win percentage, then point differential.
+
+    Setup — 4-clique {P,Q,R,S}, separate 2-clique {U,V}, no cross-games:
+        P 3-0 (overall 1.000, +57 pd)   Q 2-1 (overall 0.667)
+        R 1-2 (overall 0.333)            S 0-3 (overall 0.000, −56 pd)
+        U 1-0 (overall 1.000, +21 pd)   V 0-1 (overall 0.000, −21 pd)
     """
 
     def setUp(self):
-        # 4-team group: P, Q, R, S — S goes 0-3 (worst record possible)
-        # 2-team group: U, V — U goes 1-0 (best record possible)
-        # S should still rank above U because S's group is larger.
         self.r = make_ranker(
             ("P", "Q", 28, 21),
             ("P", "R", 35, 17),
@@ -195,21 +197,26 @@ class TestMultipleGroupTiers(unittest.TestCase):
             ("U", "V", 35, 14),
         )
         self.results = self.r.rank()
+        self.names = ranked_names(self.results)
 
-    def test_four_group_before_two_group(self):
-        names = ranked_names(self.results)
-        # All of P, Q, R, S must appear before U and V
-        for four_team in ["P", "Q", "R", "S"]:
-            for two_team in ["U", "V"]:
-                self.assertLess(
-                    names.index(four_team),
-                    names.index(two_team),
-                    f"{four_team} (4-group) should rank above {two_team} (2-group)",
-                )
+    def test_p_above_u(self):
+        """P (1.000 win pct, +57 pd) outranks U (1.000 win pct, +21 pd)."""
+        self.assertLess(self.names.index("P"), self.names.index("U"))
 
-    def test_s_before_u(self):
-        names = ranked_names(self.results)
-        self.assertLess(names.index("S"), names.index("U"))
+    def test_u_above_q_r_s(self):
+        """U (1.000 win pct) outranks Q, R, S which have lower win pct."""
+        for below in ["Q", "R", "S"]:
+            self.assertLess(self.names.index("U"), self.names.index(below),
+                            f"U (1.000) should rank above {below}")
+
+    def test_four_group_internal_order(self):
+        """Within the 4-clique, shared-clique comparison gives P>Q>R>S."""
+        for better, worse in [("P", "Q"), ("Q", "R"), ("R", "S")]:
+            self.assertLess(self.names.index(better), self.names.index(worse))
+
+    def test_v_above_s(self):
+        """V (0.000 win pct, −21 pd) outranks S (0.000, −56 pd) on point diff."""
+        self.assertLess(self.names.index("V"), self.names.index("S"))
 
 
 class TestOverlappingGroups(unittest.TestCase):
@@ -246,21 +253,40 @@ class TestOverlappingGroups(unittest.TestCase):
         row = next(r for r in self.results if r["team"] == "E")
         self.assertEqual(row["group_size"], 3)
 
-    def test_all_4_group_teams_before_e(self):
+    def test_abc_before_e(self):
+        """A, B, C all beat or outperform E in the shared 3-clique → rank above E."""
         names = ranked_names(self.results)
-        for team in ["A", "B", "C", "D"]:
-            self.assertLess(names.index(team), names.index("E"))
+        for team in ["A", "B", "C"]:
+            self.assertLess(names.index(team), names.index("E"),
+                            f"{team} should rank above E")
+
+    def test_e_above_d(self):
+        """E (0-2 overall, −6 pd) outranks D (0-3 overall, −46 pd) on overall record."""
+        names = ranked_names(self.results)
+        self.assertLess(names.index("E"), names.index("D"))
 
 
 class TestIndependentTeams(unittest.TestCase):
     """
-    Teams that played games but never formed a complete round-robin with
-    anyone beyond a 2-clique (head-to-head) still appear in the rankings.
+    Teams that formed no round-robin group larger than a 2-clique are still
+    ranked using the available shared-clique and overall-record comparisons.
+
+    Setup:
+        Trio {X,Y,Z}: X 2-0, Y 1-1, Z 0-2  (shared 3-clique)
+        I1 lost to X  → shared {I1,X}: I1 0-1
+        I2 beat  Y    → shared {I2,Y}: I2 1-0
+
+    Expected order derived from pairwise comparisons:
+        X  (1.000 overall, +46 pd) — beats I1 directly
+        I2 (1.000 overall, +14 pd) — beats Y directly; no shared clique with X,
+                                       X ranks first via X's better point diff
+        Y  (0.333 overall)         — beats Z in trio; loses to I2 directly
+        I1 (0.000 overall, −21 pd) — tied with Z on win pct and point diff;
+                                       alphabetically 'I1' < 'Z' → I1 above Z
+        Z  (0.000 overall, −21 pd)
     """
 
     def setUp(self):
-        # Full trio round-robin: X, Y, Z
-        # Independent I1 only played X.  I2 only played Y.
         self.r = make_ranker(
             ("X", "Y", 28, 21),
             ("X", "Z", 35, 17),
@@ -269,15 +295,26 @@ class TestIndependentTeams(unittest.TestCase):
             ("I2", "Y", 28, 14),   # I2 beats Y
         )
         self.results = self.r.rank()
+        self.names = ranked_names(self.results)
 
     def test_all_five_ranked(self):
         self.assertEqual(len(self.results), 5)
 
-    def test_trio_before_independents(self):
-        names = ranked_names(self.results)
-        for trio_team in ["X", "Y", "Z"]:
-            for ind in ["I1", "I2"]:
-                self.assertLess(names.index(trio_team), names.index(ind))
+    def test_x_first(self):
+        """X (2-0 in trio, 3-0 overall) tops the ranking."""
+        self.assertEqual(self.names[0], "X")
+
+    def test_i2_above_y(self):
+        """I2 beat Y in their shared 2-clique → I2 ranks above Y."""
+        self.assertLess(self.names.index("I2"), self.names.index("Y"))
+
+    def test_x_above_i1(self):
+        """X beat I1 in their shared 2-clique → X ranks above I1."""
+        self.assertLess(self.names.index("X"), self.names.index("I1"))
+
+    def test_y_above_i1(self):
+        """Y (0.333 overall) outranks I1 (0.000 overall) via fallback."""
+        self.assertLess(self.names.index("Y"), self.names.index("I1"))
 
 
 class TestCSVLoading(unittest.TestCase):
@@ -388,34 +425,55 @@ class TestDemoData(unittest.TestCase):
     def test_aces_first(self):
         self.assertEqual(self.results[0]["team"], "Aces")
 
-    def test_power_conf_is_first_8(self):
-        power = {"Aces", "Bears", "Colts", "Dukes",
-                 "Eagles", "Falcons", "Gators", "Hawks"}
-        for row in self.results[:8]:
-            self.assertIn(row["team"], power)
-            self.assertEqual(row["group_size"], 8)
+    def test_intra_clique_order_preserved(self):
+        """Within each conference, in-clique record determines ordering."""
+        # Power conf: Aces>Bears>Colts>Dukes (all by in-clique win pct)
+        names = ranked_names(self.results)
+        for better, worse in [("Aces", "Bears"), ("Bears", "Colts"),
+                               ("Colts", "Dukes")]:
+            self.assertLess(names.index(better), names.index(worse),
+                            f"{better} should rank above {worse}")
+        # Mid-major: Rams>Spartans>Tigers>Vikings>Wildcats>Zephyrs
+        for better, worse in [("Rams", "Spartans"), ("Spartans", "Tigers"),
+                               ("Tigers", "Vikings"), ("Vikings", "Wildcats"),
+                               ("Wildcats", "Zephyrs")]:
+            self.assertLess(names.index(better), names.index(worse),
+                            f"{better} should rank above {worse}")
+        # Small conf: Lions>Panthers>Wolves>Sharks
+        for better, worse in [("Lions", "Panthers"), ("Panthers", "Wolves"),
+                               ("Wolves", "Sharks")]:
+            self.assertLess(names.index(better), names.index(worse))
+        # Trio: Mustangs>Bobcats>Cougars
+        self.assertLess(names.index("Mustangs"), names.index("Bobcats"))
+        self.assertLess(names.index("Bobcats"), names.index("Cougars"))
 
-    def test_mid_major_is_next_6(self):
-        mid = {"Rams", "Spartans", "Tigers", "Vikings", "Wildcats", "Zephyrs"}
-        for row in self.results[8:14]:
-            self.assertIn(row["team"], mid)
-            self.assertEqual(row["group_size"], 6)
+    def test_cross_clique_via_shared_2clique(self):
+        """Direct shared 2-clique games determine cross-conference ordering."""
+        names = ranked_names(self.results)
+        # Aces beat Lone Wolf → Aces above Lone Wolf
+        self.assertLess(names.index("Aces"), names.index("Lone Wolf"))
+        # Bears beat Road Runner → Bears above Road Runner
+        self.assertLess(names.index("Bears"), names.index("Road Runner"))
+        # Lions beat Trailblazer → Lions above Trailblazer
+        self.assertLess(names.index("Lions"), names.index("Trailblazer"))
+        # Lone Wolf beat Zephyrs → Lone Wolf above Zephyrs
+        self.assertLess(names.index("Lone Wolf"), names.index("Zephyrs"))
+        # Road Runner beat Sharks → Road Runner above Sharks
+        self.assertLess(names.index("Road Runner"), names.index("Sharks"))
+        # Trailblazer beat Cougars → Trailblazer above Cougars
+        self.assertLess(names.index("Trailblazer"), names.index("Cougars"))
 
-    def test_small_conf_next_4(self):
-        small = {"Lions", "Panthers", "Sharks", "Wolves"}
-        for row in self.results[14:18]:
-            self.assertIn(row["team"], small)
-            self.assertEqual(row["group_size"], 4)
-
-    def test_trio_next_3(self):
-        trio = {"Mustangs", "Bobcats", "Cougars"}
-        for row in self.results[18:21]:
-            self.assertIn(row["team"], trio)
-            self.assertEqual(row["group_size"], 3)
+    def test_cross_clique_via_overall_record(self):
+        """Teams with no shared clique are ordered by overall win pct / point diff."""
+        names = ranked_names(self.results)
+        # Aces (8-0, 1.000) ranks above Rams (5-0, 1.000) by overall point diff
+        self.assertLess(names.index("Aces"), names.index("Rams"))
+        # Bears (7-1, 0.875) ranks above Spartans (5-1, 0.833)
+        self.assertLess(names.index("Bears"), names.index("Spartans"))
 
     def test_cyclic_tie_resolved_by_point_diff(self):
-        # Eagles, Falcons, Gators all 2-5 with cyclic h2h (1-1 among each other).
-        # Resolved by point differential in the 8-clique.
+        # Eagles, Falcons, Gators all 2-5 in the 8-clique with cyclic h2h.
+        # Resolved by point differential within the shared 8-clique.
         eagles  = self.by_team["Eagles"]["rank"]
         falcons = self.by_team["Falcons"]["rank"]
         gators  = self.by_team["Gators"]["rank"]
@@ -423,8 +481,18 @@ class TestDemoData(unittest.TestCase):
         self.assertLess(eagles, falcons)
         self.assertLess(falcons, gators)
 
-    def test_hawks_last_in_power_conf(self):
-        self.assertEqual(self.results[7]["team"], "Hawks")
+    def test_group_size_field_reflects_primary_clique(self):
+        """group_size shows the size of the team's largest round-robin group."""
+        for team in ["Aces", "Bears", "Colts", "Dukes",
+                     "Eagles", "Falcons", "Gators", "Hawks"]:
+            self.assertEqual(self.by_team[team]["group_size"], 8)
+        for team in ["Rams", "Spartans", "Tigers",
+                     "Vikings", "Wildcats", "Zephyrs"]:
+            self.assertEqual(self.by_team[team]["group_size"], 6)
+        for team in ["Lions", "Panthers", "Wolves", "Sharks"]:
+            self.assertEqual(self.by_team[team]["group_size"], 4)
+        for team in ["Mustangs", "Bobcats", "Cougars"]:
+            self.assertEqual(self.by_team[team]["group_size"], 3)
 
 
 if __name__ == "__main__":

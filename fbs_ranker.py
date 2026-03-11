@@ -3,25 +3,25 @@
 FBS Round-Robin Ranking Tool
 
 Ranks FBS football teams by discovering round-robin groups (cliques where every
-team played every other team) and ranking within those groups, processing from
-the largest group down to the smallest.
+team played every other team) and using those groups as the authoritative basis
+for comparison — with larger groups taking priority over smaller ones.
 
 Algorithm:
   1. Build an undirected game graph: nodes = teams, edges = games played.
   2. Find all maximal cliques (Bron-Kerbosch via NetworkX).  Each maximal clique
      is the largest round-robin group that cannot be extended further.
-  3. Sort cliques by size, largest first.  Same-sized cliques are sorted by their
-     collective winning percentage so stronger groups appear first.
-  4. For each clique, rank only the teams that have not yet been ranked:
-       a. Calculate each team's win-loss record against ALL members of the clique.
-       b. Sort by win percentage (descending).
-       c. Break ties with head-to-head record inside the tied sub-group.
-       d. Further ties broken by cumulative point differential inside the clique.
-  5. Teams ranked in a larger group always appear above teams ranked in a smaller
-     group, regardless of performance differences.
-  6. Any teams not placed by a clique (played no games or formed no complete
-     round-robin with anyone) are ranked last by their overall win percentage,
-     then point differential.
+  3. For every pair of teams, determine their relative order using the LARGEST
+     clique that contains both of them ("shared clique"):
+       a. Compare win percentage within that shared clique (descending).
+       b. Still tied → compare cumulative point differential within that clique.
+       c. Still tied → repeat steps a-b with the next-smaller shared clique.
+          A smaller shared clique can only break an existing tie; it can never
+          reverse an order established by a larger clique.
+       d. No shared clique → compare by overall (all-games) win percentage,
+          then overall point differential, then alphabetical name.
+  4. Sort all teams globally using that pairwise comparison.
+  5. Each team's displayed record is their win-loss-PF-PA within their
+     largest (primary) clique.
 
 Usage:
     python fbs_ranker.py games.csv
@@ -37,6 +37,7 @@ CSV format (input):
 import csv
 import sys
 import argparse
+import functools
 from collections import defaultdict
 from itertools import combinations
 
@@ -134,122 +135,83 @@ class FBSRoundRobinRanker:
         total = wins + losses
         return wins / total if total > 0 else 0.0
 
-    def _rank_group(self, unranked_teams: list, full_clique: list) -> list:
-        """Return *unranked_teams* sorted best-to-worst using their record
-        inside *full_clique*.
+    def _overall_record(self, team: str) -> tuple:
+        """Return (wins, losses, points_for, points_against) across all games."""
+        w = l = pf = pa = 0
+        for (ta, tb), (sa, sb) in self._game_map.items():
+            if ta == team:
+                pf += sa; pa += sb
+                if sa > sb: w += 1
+                else: l += 1
+            elif tb == team:
+                pf += sb; pa += sa
+                if sb > sa: w += 1
+                else: l += 1
+        return w, l, pf, pa
 
-        Tie-breaking order:
-          1. Win percentage within the clique (descending).
-          2. Head-to-head record among tied teams only.
-          3. Point differential within the clique (descending).
-          4. Alphabetical name (deterministic fallback).
-        """
-        if len(unranked_teams) <= 1:
-            return list(unranked_teams)
+    def _pairwise_compare(self, team_a: str, team_b: str,
+                          all_cliques: list) -> int:
+        """Compare two teams for global ranking purposes.
 
-        # Compute records for each team in the full clique context.
-        records: dict = {}
-        for t in unranked_teams:
-            w, l, pf, pa = self._record_in_group(t, full_clique)
-            records[t] = {"wins": w, "losses": l, "pf": pf, "pa": pa,
-                          "win_pct": self._win_pct(w, l)}
-
-        # Initial sort: win pct desc, then point diff desc, then name asc.
-        sorted_teams = sorted(
-            unranked_teams,
-            key=lambda t: (
-                -records[t]["win_pct"],
-                -(records[t]["pf"] - records[t]["pa"]),
-                t,
-            ),
-        )
-
-        # Scan for ties at the win-pct level and resolve with head-to-head.
-        result: list = []
-        i = 0
-        while i < len(sorted_teams):
-            wpc_i = records[sorted_teams[i]]["win_pct"]
-            j = i + 1
-            while j < len(sorted_teams) and abs(records[sorted_teams[j]]["win_pct"] - wpc_i) < 1e-9:
-                j += 1
-            tied = sorted_teams[i:j]
-            if len(tied) > 1:
-                tied = self._resolve_ties(tied, records)
-            result.extend(tied)
-            i = j
-
-        return result
-
-    def _resolve_ties(self, tied_teams: list, outer_records: dict) -> list:
-        """Break ties among teams that share a win percentage.
+        Returns -1 if team_a ranks higher, 1 if team_b ranks higher, 0 if equal.
 
         Strategy:
-          1. Compute head-to-head win percentage among ONLY the tied teams.
-          2. Sort by that h2h win pct descending.
-          3. Any remaining ties within h2h are broken by overall point diff
-             (from outer_records), then alphabetical.
+          1. Find every clique containing BOTH teams (shared cliques).
+          2. Process from largest shared clique to smallest:
+               a. Compare by win pct within that clique.
+               b. If tied, compare by point differential within that clique.
+               c. If still tied, move to the next-smaller shared clique.
+             A smaller clique can only break an existing tie — it can never
+             reverse an ordering established by a larger clique.
+          3. If no shared clique (or all shared cliques are completely tied),
+             fall back to overall win pct, then overall point diff, then name.
         """
-        # Two-team shortcut
-        if len(tied_teams) == 2:
-            a, b = tied_teams
-            result = self.get_result(a, b)
-            if result:
-                sa, sb = result
-                if sa != sb:
-                    return [a, b] if sa > sb else [b, a]
-            # Fall through to point differential
-            diff_a = outer_records[a]["pf"] - outer_records[a]["pa"]
-            diff_b = outer_records[b]["pf"] - outer_records[b]["pa"]
-            if diff_a != diff_b:
-                return [a, b] if diff_a > diff_b else [b, a]
-            return sorted([a, b])  # alphabetical
-
-        # Compute h2h win pct within the tied group.
-        h2h_wins: dict = defaultdict(int)
-        h2h_losses: dict = defaultdict(int)
-        for a, b in combinations(tied_teams, 2):
-            result = self.get_result(a, b)
-            if result is None:
-                continue
-            sa, sb = result
-            if sa > sb:
-                h2h_wins[a] += 1
-                h2h_losses[b] += 1
-            elif sb > sa:
-                h2h_wins[b] += 1
-                h2h_losses[a] += 1
-            # Ties in score are ignored for record purposes (shouldn't happen in FBS)
-
-        def h2h_pct(t: str) -> float:
-            total = h2h_wins[t] + h2h_losses[t]
-            return h2h_wins[t] / total if total > 0 else 0.0
-
-        # Sort by h2h win pct, then outer point diff, then name.
-        sorted_tied = sorted(
-            tied_teams,
-            key=lambda t: (
-                -h2h_pct(t),
-                -(outer_records[t]["pf"] - outer_records[t]["pa"]),
-                t,
-            ),
+        # All cliques containing both teams, largest first.
+        # Use sorted team list as a stable secondary key.
+        shared = sorted(
+            [c for c in all_cliques if team_a in c and team_b in c],
+            key=lambda c: (-len(c), sorted(c)),
         )
 
-        # Recursively resolve any remaining ties at the h2h level.
-        result_list: list = []
-        i = 0
-        while i < len(sorted_tied):
-            pct_i = h2h_pct(sorted_tied[i])
-            j = i + 1
-            while j < len(sorted_tied) and abs(h2h_pct(sorted_tied[j]) - pct_i) < 1e-9:
-                j += 1
-            sub = sorted_tied[i:j]
-            if len(sub) > 1:
-                # Final level: sort by point differential, then alphabetically.
-                sub.sort(key=lambda t: (-(outer_records[t]["pf"] - outer_records[t]["pa"]), t))
-            result_list.extend(sub)
-            i = j
+        for clique in shared:
+            wa, la, pfa, paa = self._record_in_group(team_a, clique)
+            wb, lb, pfb, pab = self._record_in_group(team_b, clique)
 
-        return result_list
+            wpc_a = self._win_pct(wa, la)
+            wpc_b = self._win_pct(wb, lb)
+            if abs(wpc_a - wpc_b) > 1e-9:
+                return -1 if wpc_a > wpc_b else 1
+
+            # Tied on win pct: compare point differential within this clique.
+            # (Using point diff avoids the non-transitivity that raw h2h creates
+            # in 3-way cycles; for 2-team cliques win pct already encodes h2h.)
+            diff_a = pfa - paa
+            diff_b = pfb - pab
+            if diff_a != diff_b:
+                return -1 if diff_a > diff_b else 1
+
+            # Completely tied in this clique → try the next-smaller shared clique.
+
+        # No shared clique (or tied across all of them): fall back to overall record.
+        ow_a, ol_a, opf_a, opa_a = self._overall_record(team_a)
+        ow_b, ol_b, opf_b, opa_b = self._overall_record(team_b)
+
+        wpc_a = self._win_pct(ow_a, ol_a)
+        wpc_b = self._win_pct(ow_b, ol_b)
+        if abs(wpc_a - wpc_b) > 1e-9:
+            return -1 if wpc_a > wpc_b else 1
+
+        diff_a = opf_a - opa_a
+        diff_b = opf_b - opa_b
+        if diff_a != diff_b:
+            return -1 if diff_a > diff_b else 1
+
+        # Alphabetical as deterministic final fallback.
+        if team_a < team_b:
+            return -1
+        if team_a > team_b:
+            return 1
+        return 0
 
     # ------------------------------------------------------------------
     # Public ranking API
@@ -258,17 +220,27 @@ class FBSRoundRobinRanker:
     def rank(self) -> list:
         """Perform the full round-robin ranking.
 
+        For each pair of teams, the comparison uses the largest shared clique
+        (round-robin group they both belong to).  Smaller shared cliques serve
+        only as tiebreakers and never reverse a larger clique's ordering.
+        Teams with no shared clique are compared by overall record.
+
+        Cycles in the preference graph (e.g. A beats B, B beats C, C beats A)
+        are resolved using NetworkX's strongly-connected-component (SCC)
+        condensation: teams in a cycle are grouped, then ranked within the
+        cycle by overall win pct → overall point differential → name.
+
         Returns:
             A list of dicts (one per team), ordered best-to-worst, with keys:
                 rank          - integer position (1 = best)
                 team          - team name string
-                group_size    - number of teams in the round-robin group used
-                wins          - wins against group opponents
-                losses        - losses against group opponents
+                group_size    - size of the team's largest (primary) clique
+                wins          - wins inside that primary clique
+                losses        - losses inside that primary clique
                 win_pct       - wins / (wins + losses), rounded to 3 dp
-                points_for    - cumulative points scored against group opponents
-                points_against- cumulative points allowed against group opponents
-                point_diff    - points_for - points_against
+                points_for    - cumulative PF vs. primary-clique opponents
+                points_against- cumulative PA vs. primary-clique opponents
+                point_diff    - points_for − points_against
         """
         if not self.teams:
             return []
@@ -282,71 +254,65 @@ class FBSRoundRobinRanker:
         # ---- Discover all maximal cliques (round-robin groups) ----
         all_cliques = list(nx.find_cliques(G))
 
-        # ---- Sort cliques: largest first; ties broken by group quality ----
-        # Group quality = average win-pct of members within the clique, so
-        # stronger groups appear before weaker groups of the same size.
-        def clique_sort_key(clique):
-            avg_wins = sum(
-                self._record_in_group(t, clique)[0] for t in clique
-            ) / max(len(clique), 1)
-            # Negate both: largest size first, then highest avg wins first.
-            return (-len(clique), -avg_wins)
+        # ---- For display: each team's PRIMARY clique (largest they belong to) ----
+        def primary_clique(team: str) -> list:
+            team_cliques = [c for c in all_cliques if team in c]
+            if not team_cliques:
+                return [team]
+            # Priority: largest clique, then best win pct within that clique,
+            # then best point differential, then alphabetical (deterministic).
+            def key(c):
+                w, l, pf, pa = self._record_in_group(team, c)
+                return (len(c), self._win_pct(w, l), pf - pa, sorted(c))
+            return max(team_cliques, key=key)
 
-        all_cliques.sort(key=clique_sort_key)
+        team_primary = {t: primary_clique(t) for t in self.teams}
 
-        # ---- Assign ranks ----
-        ranked_teams: list = []
-        ranked_set: set = set()
-        team_group: dict = {}   # team -> clique list used for ranking
+        # ---- Build directed preference graph ----
+        # Edge A → B means "A is preferred to B" (A ranks higher).
+        # We evaluate all O(n²) pairs; for each we call _pairwise_compare.
+        pref = nx.DiGraph()
+        pref.add_nodes_from(self.teams)
+        teams_list = sorted(self.teams)   # deterministic iteration order
+        for i in range(len(teams_list)):
+            for j in range(i + 1, len(teams_list)):
+                a, b = teams_list[i], teams_list[j]
+                cmp = self._pairwise_compare(a, b, all_cliques)
+                if cmp < 0:
+                    pref.add_edge(a, b)
+                elif cmp > 0:
+                    pref.add_edge(b, a)
+                # cmp == 0: teams are indistinguishable; no edge added.
 
-        for clique in all_cliques:
-            unranked = [t for t in clique if t not in ranked_set]
-            if not unranked:
-                continue
+        # ---- Condense cycles into SCCs ----
+        # nx.condensation returns a DAG whose nodes are SCCs.
+        # condensed.nodes[v]['members'] is a frozenset of original team names.
+        # Topological sort of the condensed DAG: sources (no predecessors) first.
+        # Since edges point from better to worse teams, sources = best teams.
+        condensed = nx.condensation(pref)
+        topo = list(nx.topological_sort(condensed))
 
-            ordered = self._rank_group(unranked, clique)
-            for team in ordered:
-                ranked_teams.append(team)
-                ranked_set.add(team)
-                team_group[team] = clique
-
-        # ---- Handle teams with no round-robin group (independents, etc.) ----
-        remaining = [t for t in self.teams if t not in ranked_set]
-        if remaining:
-            overall: dict = {}
-            for team in remaining:
-                w = l = pf = pa = 0
-                for (ta, tb), (sa, sb) in self._game_map.items():
-                    if ta == team:
-                        pf += sa; pa += sb
-                        if sa > sb: w += 1
-                        else: l += 1
-                    elif tb == team:
-                        pf += sb; pa += sa
-                        if sb > sa: w += 1
-                        else: l += 1
-                overall[team] = {"wins": w, "losses": l, "pf": pf, "pa": pa,
-                                 "win_pct": self._win_pct(w, l)}
-
-            remaining.sort(key=lambda t: (
-                -overall[t]["win_pct"],
-                -(overall[t]["pf"] - overall[t]["pa"]),
-                t,
-            ))
-            for team in remaining:
-                ranked_teams.append(team)
-                team_group[team] = [team]   # solo pseudo-group
+        # ---- Flatten SCCs into a final ordered team list ----
+        sorted_teams: list = []
+        for scc_id in topo:
+            members = list(condensed.nodes[scc_id]["members"])
+            if len(members) > 1:
+                # Cycle detected: rank internally by overall record.
+                def overall_sort_key(t: str) -> tuple:
+                    w, l, pf, pa = self._overall_record(t)
+                    return (-self._win_pct(w, l), -(pf - pa), t)
+                members.sort(key=overall_sort_key)
+            sorted_teams.extend(members)
 
         # ---- Build output records ----
         results = []
-        for rank_idx, team in enumerate(ranked_teams, start=1):
-            group = team_group[team]
-            w, l, pf, pa = self._record_in_group(team, group)
-            total = w + l
+        for rank_idx, team in enumerate(sorted_teams, start=1):
+            primary = team_primary[team]
+            w, l, pf, pa = self._record_in_group(team, primary)
             results.append({
                 "rank": rank_idx,
                 "team": team,
-                "group_size": len(group),
+                "group_size": len(primary),
                 "wins": w,
                 "losses": l,
                 "win_pct": round(self._win_pct(w, l), 3),
@@ -373,9 +339,12 @@ def generate_demo_games() -> list:
       * Independents – 3 teams that played some games but form no
                        complete round-robin among themselves
 
-    The dataset includes a 3-way tie in the Power Conference (at 3-4) to
-    exercise the head-to-head tiebreaker, and a 2-way tie in the Mid-Major
-    (at 2-3) resolved by point differential.
+    The dataset includes a 3-way tie in the Power Conference (at 2-5) to
+    exercise the point-differential tiebreaker (cyclic h2h makes h2h record
+    among the three teams all 1-1, so point diff decides).
+
+    Cross-conference games let independents be placed relative to conference
+    teams via shared 2-cliques, demonstrating the largest-shared-clique rule.
     """
     games = []
 
@@ -468,15 +437,22 @@ def generate_demo_games() -> list:
     g("Mustangs", 24, "Cougars",  17)   # Mustangs beats Cougars
 
     # -----------------------------------------------------------------------
-    # Independents (3 teams, no complete round-robin among themselves)
-    # Each plays 2–3 games but the trio never all played each other.
-    # Lone Wolf played Aces (from Power) and Rams (from Mid-Major).
+    # Independents – 3 teams that each play 2 cross-conference games so we
+    # can compare them to conference teams via shared 2-cliques.
+    # Each independent beats the last-place team in one conference and loses
+    # to a strong team in another.  This creates meaningful cross-group
+    # bridges without generating cyclic preferences.
+    #
+    # Lone Wolf:   beats Zephyrs (last in Mid-Major), loses to Aces (Power 1st)
+    # Road Runner: beats Sharks   (last in Small),    loses to Bears (Power 2nd)
+    # Trailblazer: beats Cougars  (last in Trio),     loses to Lions (Small 1st)
     # -----------------------------------------------------------------------
-    g("Lone Wolf",   35, "Rams",      28)   # Lone Wolf wins  (2 total games: 1-1)
-    g("Aces",        45, "Lone Wolf", 17)   # Aces wins
-    g("Road Runner", 14, "Bears",     31)   # Bears wins      (1 game: 0-1)
-    g("Road Runner", 21, "Spartans",  28)   # Spartans wins   (1 game: 0-2)
-    g("Trailblazer", 31, "Lions",     24)   # Trailblazer wins (1 game: 1-0)
+    g("Lone Wolf",    35, "Zephyrs",     14)   # Lone Wolf beats last Mid-Major
+    g("Aces",         45, "Lone Wolf",   17)   # Aces beats Lone Wolf
+    g("Road Runner",  35, "Sharks",      17)   # Road Runner beats last Small
+    g("Bears",        31, "Road Runner", 14)   # Bears beats Road Runner
+    g("Trailblazer",  28, "Cougars",     14)   # Trailblazer beats last Trio
+    g("Lions",        21, "Trailblazer", 14)   # Lions beats Trailblazer
 
     return games
 
