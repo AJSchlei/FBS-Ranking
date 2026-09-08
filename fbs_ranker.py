@@ -19,7 +19,14 @@ Algorithm:
           reverse an order established by a larger clique.
        d. No shared clique → compare by overall (all-games) win percentage,
           then overall point differential, then alphabetical name.
-  4. Sort all teams globally using that pairwise comparison.
+     Each comparison records its STRENGTH: the size of the group that decided
+     it (0 for the overall-record fallback in step d).
+  4. Combine the pairwise results into one global order using Tideman's
+     ranked-pairs procedure: sort every comparison strongest-first, then lock
+     each one in unless it contradicts what the already-locked (stronger)
+     comparisons imply.  When pairwise results conflict, the ordering made
+     inside the largest group therefore wins, and the result is acyclic by
+     construction.
   5. Each team's displayed record is their win-loss-PF-PA within their
      largest (primary) clique.
 
@@ -37,9 +44,7 @@ CSV format (input):
 import csv
 import sys
 import argparse
-import functools
 from collections import defaultdict
-from itertools import combinations
 
 import networkx as nx
 
@@ -150,10 +155,16 @@ class FBSRoundRobinRanker:
         return w, l, pf, pa
 
     def _pairwise_compare(self, team_a: str, team_b: str,
-                          all_cliques: list) -> int:
-        """Compare two teams for global ranking purposes.
+                          all_cliques: list) -> tuple:
+        """Compare two teams and report how authoritative the comparison is.
 
-        Returns -1 if team_a ranks higher, 1 if team_b ranks higher, 0 if equal.
+        Returns ``(cmp, strength)``.  *cmp* is -1 if team_a ranks higher, 1 if
+        team_b ranks higher, 0 if the two are genuinely indistinguishable.
+
+        *strength* is ``(group_size, win_pct_gap, point_diff_gap)`` describing
+        the round-robin group that actually decided the comparison.  ``rank()``
+        uses it to settle conflicts between pairwise results: a comparison made
+        inside a larger group beats one made inside a smaller group.
 
         Strategy:
           1. Find every clique containing BOTH teams (shared cliques).
@@ -165,6 +176,8 @@ class FBSRoundRobinRanker:
              reverse an ordering established by a larger clique.
           3. If no shared clique (or all shared cliques are completely tied),
              fall back to overall win pct, then overall point diff, then name.
+             This fallback reports group_size 0 — the weakest strength there
+             is — so any chain of group-based orderings overrides it.
         """
         # All cliques containing both teams, largest first.
         # Use sorted team list as a stable secondary key.
@@ -179,39 +192,46 @@ class FBSRoundRobinRanker:
 
             wpc_a = self._win_pct(wa, la)
             wpc_b = self._win_pct(wb, lb)
+            diff_a = pfa - paa
+            diff_b = pfb - pab
+
             if abs(wpc_a - wpc_b) > 1e-9:
-                return -1 if wpc_a > wpc_b else 1
+                strength = (len(clique), abs(wpc_a - wpc_b), abs(diff_a - diff_b))
+                return (-1 if wpc_a > wpc_b else 1), strength
 
             # Tied on win pct: compare point differential within this clique.
             # (Using point diff avoids the non-transitivity that raw h2h creates
             # in 3-way cycles; for 2-team cliques win pct already encodes h2h.)
-            diff_a = pfa - paa
-            diff_b = pfb - pab
             if diff_a != diff_b:
-                return -1 if diff_a > diff_b else 1
+                strength = (len(clique), 0.0, abs(diff_a - diff_b))
+                return (-1 if diff_a > diff_b else 1), strength
 
             # Completely tied in this clique → try the next-smaller shared clique.
 
-        # No shared clique (or tied across all of them): fall back to overall record.
+        # No shared clique (or tied across all of them): fall back to overall
+        # record.  group_size 0 marks this as the weakest possible evidence, so
+        # ranked pairs discards it first whenever it conflicts with a group.
         ow_a, ol_a, opf_a, opa_a = self._overall_record(team_a)
         ow_b, ol_b, opf_b, opa_b = self._overall_record(team_b)
 
         wpc_a = self._win_pct(ow_a, ol_a)
         wpc_b = self._win_pct(ow_b, ol_b)
-        if abs(wpc_a - wpc_b) > 1e-9:
-            return -1 if wpc_a > wpc_b else 1
-
         diff_a = opf_a - opa_a
         diff_b = opf_b - opa_b
+
+        if abs(wpc_a - wpc_b) > 1e-9:
+            strength = (0, abs(wpc_a - wpc_b), abs(diff_a - diff_b))
+            return (-1 if wpc_a > wpc_b else 1), strength
+
         if diff_a != diff_b:
-            return -1 if diff_a > diff_b else 1
+            return (-1 if diff_a > diff_b else 1), (0, 0.0, abs(diff_a - diff_b))
 
         # Alphabetical as deterministic final fallback.
         if team_a < team_b:
-            return -1
+            return -1, (0, 0.0, 0)
         if team_a > team_b:
-            return 1
-        return 0
+            return 1, (0, 0.0, 0)
+        return 0, (0, 0.0, 0)
 
     # ------------------------------------------------------------------
     # Public ranking API
@@ -225,10 +245,13 @@ class FBSRoundRobinRanker:
         only as tiebreakers and never reverse a larger clique's ordering.
         Teams with no shared clique are compared by overall record.
 
-        Cycles in the preference graph (e.g. A beats B, B beats C, C beats A)
-        are resolved using NetworkX's strongly-connected-component (SCC)
-        condensation: teams in a cycle are grouped, then ranked within the
-        cycle by overall win pct → overall point differential → name.
+        Conflicts between pairwise results (e.g. A over B, B over C, but C
+        over A) are resolved by Tideman's ranked-pairs procedure: every
+        comparison is sorted by the size of the group that decided it and
+        locked in strongest-first, and any comparison that would contradict
+        the already-locked ones is discarded.  The ordering established inside
+        the largest group therefore always wins a conflict, and the resulting
+        order is acyclic by construction.
 
         Returns:
             A list of dicts (one per team), ordered best-to-worst, with keys:
@@ -268,41 +291,66 @@ class FBSRoundRobinRanker:
 
         team_primary = {t: primary_clique(t) for t in self.teams}
 
-        # ---- Build directed preference graph ----
-        # Edge A → B means "A is preferred to B" (A ranks higher).
-        # We evaluate all O(n²) pairs; for each we call _pairwise_compare.
-        pref = nx.DiGraph()
-        pref.add_nodes_from(self.teams)
+        # ---- Collect every pairwise verdict, with its strength ----
+        # We evaluate all O(n²) pairs; each yields one candidate ordering plus
+        # the size of the round-robin group that decided it.
         teams_list = sorted(self.teams)   # deterministic iteration order
+        candidates = []
         for i in range(len(teams_list)):
             for j in range(i + 1, len(teams_list)):
                 a, b = teams_list[i], teams_list[j]
-                cmp = self._pairwise_compare(a, b, all_cliques)
+                cmp, strength = self._pairwise_compare(a, b, all_cliques)
                 if cmp < 0:
-                    pref.add_edge(a, b)
+                    candidates.append((strength, a, b))
                 elif cmp > 0:
-                    pref.add_edge(b, a)
-                # cmp == 0: teams are indistinguishable; no edge added.
+                    candidates.append((strength, b, a))
+                # cmp == 0: teams are indistinguishable; no candidate added.
 
-        # ---- Condense cycles into SCCs ----
-        # nx.condensation returns a DAG whose nodes are SCCs.
-        # condensed.nodes[v]['members'] is a frozenset of original team names.
-        # Topological sort of the condensed DAG: sources (no predecessors) first.
-        # Since edges point from better to worse teams, sources = best teams.
-        condensed = nx.condensation(pref)
-        topo = list(nx.topological_sort(condensed))
+        # Strongest first: biggest deciding group, then the most decisive
+        # margin inside it.  Team names break remaining ties deterministically.
+        candidates.sort(key=lambda c: (-c[0][0], -c[0][1], -c[0][2], c[1], c[2]))
 
-        # ---- Flatten SCCs into a final ordered team list ----
-        sorted_teams: list = []
-        for scc_id in topo:
-            members = list(condensed.nodes[scc_id]["members"])
-            if len(members) > 1:
-                # Cycle detected: rank internally by overall record.
-                def overall_sort_key(t: str) -> tuple:
-                    w, l, pf, pa = self._overall_record(t)
-                    return (-self._win_pct(w, l), -(pf - pa), t)
-                members.sort(key=overall_sort_key)
-            sorted_teams.extend(members)
+        # ---- Lock verdicts in strongest-first (Tideman's ranked pairs) ----
+        # A verdict is discarded if the verdicts already locked in imply the
+        # opposite order.  Since stronger verdicts are locked first, the
+        # largest shared group always wins a conflict — and the resulting
+        # graph is acyclic by construction, so no cycle handling is needed.
+        #
+        # Reachability is kept as integer bitmasks, which makes the
+        # "would this create a cycle?" test a single bitwise AND.
+        bit = {t: 1 << i for i, t in enumerate(teams_list)}
+        # desc[t]: teams t ranks above (transitively), including t itself.
+        # anc[t] : teams that rank above t (transitively), including t itself.
+        desc = {t: bit[t] for t in teams_list}
+        anc = {t: bit[t] for t in teams_list}
+
+        def set_bits(mask: int):
+            """Yield the team names whose bits are set in *mask*."""
+            while mask:
+                low = mask & -mask
+                yield teams_list[low.bit_length() - 1]
+                mask ^= low
+
+        order = nx.DiGraph()
+        order.add_nodes_from(teams_list)
+        for _strength, winner, loser in candidates:
+            if desc[loser] & bit[winner]:
+                # Stronger verdicts already put loser above winner.  The larger
+                # group's ordering wins, so this weaker verdict is discarded.
+                continue
+            if desc[winner] & bit[loser]:
+                continue                  # already implied transitively
+            order.add_edge(winner, loser)
+            above, below = anc[winner], desc[loser]
+            for t in set_bits(above):
+                desc[t] |= below
+            for t in set_bits(below):
+                anc[t] |= above
+
+        # Acyclic by construction.  Teams left mutually unordered (only
+        # possible when _pairwise_compare called them exactly equal) fall back
+        # to alphabetical order.
+        sorted_teams = list(nx.lexicographical_topological_sort(order))
 
         # ---- Build output records ----
         results = []

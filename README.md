@@ -1,9 +1,10 @@
 # FBS Round-Robin Ranking Tool
 
 Ranks FBS football teams by discovering **round-robin groups** — sets of teams
-where every team played every other team — and ranking within those groups from
-the largest group down.  Teams ranked inside a larger group always appear above
-teams ranked inside a smaller group, regardless of individual win percentages.
+where every team played every other team — and using those groups as the
+evidence for every head-to-head judgement.  Two teams are compared inside the
+largest group they share; when those judgements conflict with each other, the
+one made inside the larger group wins.
 
 ---
 
@@ -18,47 +19,92 @@ teams ranked inside a smaller group, regardless of individual win percentages.
    A maximal clique is the largest round-robin group that cannot be
    extended by adding another team.
 
-3. Sort cliques: largest first
-   Same-size cliques are ordered by the group's aggregate winning
-   percentage so stronger groups appear first within a tier.
+3. Compare every pair of teams, and record how strong the comparison is
 
-4. Process each clique in order
-   For each clique, rank the teams that have NOT yet been assigned
-   a position:
+   For teams A and B, walk their shared cliques from largest to smallest:
 
-   a. Calculate each team's win-loss record against ALL other members
-      of the clique (not just the unranked members).
+   a. Compare win percentage within that shared clique (descending).
+   b. Still tied -> compare point differential within that clique.
+   c. Still tied -> move on to the next-smaller shared clique.
+      A smaller shared clique can only break a tie left by a larger one;
+      it can never reverse an order the larger clique established.
+   d. No shared clique at all -> compare overall (all-games) win
+      percentage, then overall point differential, then team name.
 
-   b. Sort by win percentage (descending).
+   Each verdict carries a STRENGTH: the size of the group that decided it.
+   Step (d) has strength 0 — the weakest evidence there is.
 
-   c. Break ties with head-to-head record among only the tied teams.
+4. Combine the verdicts into one global order (Tideman's ranked pairs)
 
-   d. Further ties broken by cumulative point differential within the
-      full clique (descending).
+   a. Sort every verdict strongest-first: largest deciding group, then the
+      most decisive margin inside that group.
+   b. Lock each verdict in one at a time, SKIPPING any verdict that
+      contradicts what the already-locked verdicts imply.
 
-   e. Any remaining ties resolved alphabetically for determinism.
+   Because stronger verdicts are locked first, a conflict is always
+   resolved in favour of the larger group — and the result is acyclic by
+   construction, so no separate cycle-breaking step is needed.
 
-5. Append newly ranked teams to the global ranking.
-   Teams ranked by a larger clique are never re-ranked by a smaller one.
-
-6. Any teams with no clique membership (or only solo "cliques") are
-   ranked last, ordered by their overall win percentage then point
-   differential across all games played.
+5. Read the final ranking off the locked ordering.
+   Teams left mutually unordered (only possible on an exact tie) fall
+   back to alphabetical order.
 ```
+
+---
+
+## Why ranked pairs
+
+Pairwise comparisons alone do not give a ranking: they can disagree with one
+another.  A can beat out B inside a 6-team conference, B can beat out C inside
+a 4-team conference, and C can still look better than A on raw overall record.
+Something has to decide which of those three statements to throw away.
+
+This tool throws away the weakest one — the verdict resting on the smallest
+group.  That is exactly [Tideman's ranked-pairs
+method](https://en.wikipedia.org/wiki/Ranked_pairs), a Condorcet method that
+sorts pairwise results by strength and locks them in until a cycle would form.
+
+The practical effect: **group evidence beats record-only evidence.**  A team
+cannot climb over an opponent that a real round-robin group placed above it
+just by padding its win percentage against teams nobody else played.
 
 ---
 
 ## Tie-breaking detail
 
+Within a single shared group:
+
 | Level | Rule |
 |-------|------|
-| 1 | Win percentage within the round-robin group |
-| 2 | Head-to-head win percentage among only the tied teams |
-| 3 | Point differential within the round-robin group |
-| 4 | Alphabetical (deterministic fallback) |
+| 1 | Win percentage within the shared round-robin group |
+| 2 | Point differential within that group |
+| 3 | Repeat levels 1-2 in the next-smaller shared group |
+| 4 | Overall win percentage, then overall point differential (strength 0) |
+| 5 | Alphabetical (deterministic fallback) |
 
-**Cyclic h2h example** — If A beat B, B beat C, and C beat A (all tied at
-1-1 in h2h), level 3 (point differential) resolves the tie automatically.
+Head-to-head is not a separate level: inside a 2-team group, win percentage
+already *is* the head-to-head result, and in larger groups raw head-to-head is
+deliberately avoided because it is non-transitive.
+
+**Cyclic h2h example** — If A beat B, B beat C, and C beat A inside one group,
+all three sit at the same win percentage, and level 2 (point differential)
+separates them.
+
+---
+
+## Conflicts between groups
+
+A worked example, as covered by `TestConflictingVerdicts`:
+
+| Verdict | Decided in | Strength |
+|---------|-----------|----------|
+| A over B | 4-team group `{A, B, X1, X2}` | 4 |
+| B over C | 3-team group `{B, C, Y1}` | 3 |
+| C over A | no shared group — overall record only | 0 |
+
+Those three verdicts form a cycle.  Ranked pairs locks in *A over B* (strength
+4), then *B over C* (strength 3), and then discards *C over A* because the two
+stronger verdicts already imply the opposite.  Final order: **A, B, C.**
 
 ---
 
@@ -150,19 +196,38 @@ for row in results:
 
 ## Demo output
 
-The built-in demo creates 24 teams across five tiers:
+`python fbs_ranker.py --demo` builds 24 teams across five groups: an 8-team
+Power Conference, a 6-team Mid-Major, a 4-team Small Conference, a 3-team Trio,
+and three Independents connected only by single cross-over games.
 
-| Tier | Teams | Group |
-|------|-------|-------|
-| 1–8  | Aces, Bears, Colts, Dukes, Eagles, Falcons, Gators, Hawks | 8-team Power Conference |
-| 9–14 | Rams, Spartans, Tigers, Vikings, Wildcats, Zephyrs | 6-team Mid-Major Conference |
-| 15–18 | Lions, Panthers, Wolves, Sharks | 4-team Small Conference |
-| 19–21 | Mustangs, Bobcats, Cougars | 3-team Trio Group |
-| 22–24 | Trailblazer, Lone Wolf, Road Runner | Independents (2-clique / head-to-head only) |
+```
+  Rank  Team                   Grp   W-L      Win%    Diff
+  1     Aces                   8     7-0      1.000   +197
+  2     Rams                   6     5-0      1.000   +98
+  3     Lions                  4     3-0      1.000   +21
+  4     Mustangs               3     2-0      1.000   +21
+  5     Bears                  8     6-1      0.857   +67
+  6     Spartans               6     4-1      0.800   +38
+  7     Colts                  8     5-2      0.714   +42
+  8     Panthers               4     2-1      0.667   +0
+  9     Tigers                 6     3-2      0.600   +18
+  10    Dukes                  8     4-3      0.571   +0
+  ...
+  23    Hawks                  8     0-7      0.000   -93
+  24    Zephyrs                6     0-5      0.000   -90
+```
 
-The demo intentionally includes a **three-way cyclic tie** in the Power
-Conference (Eagles, Falcons, Gators all finish 2-5; each beats one of the
-others) to exercise the point-differential tiebreaker.
+Note that group size does **not** dictate the tiers: the unbeaten Rams (6-team
+group) and Lions (4-team group) outrank the one-loss Bears from the 8-team
+group, while winless Hawks finish 23rd despite belonging to the largest group.
+
+The demo also includes a **three-way cyclic tie** in the Power Conference
+(Eagles, Falcons, Gators all finish 2-5, each beating one of the others) to
+exercise the point-differential tiebreaker.
+
+The demo data contains no *conflicting* pairwise verdicts, so it does not
+exercise the ranked-pairs conflict rule; `TestConflictingVerdicts` covers that
+case directly.
 
 ---
 
@@ -172,16 +237,20 @@ others) to exercise the point-differential tiebreaker.
 python -m pytest tests/ -v
 ```
 
-35 tests cover:
+46 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
 - Clear win-percentage ordering
 - Two-team h2h tiebreaker
-- Cyclic three-way tie → point differential resolution
-- Multiple group tiers (larger groups ranked above smaller groups)
-- Overlapping groups (team in two cliques ranked by the larger one)
+- Cyclic three-way tie -> point differential resolution
+- Multiple group tiers
+- Overlapping groups (team in two cliques compared via the larger one)
 - Independent teams
+- Conflicting pairwise verdicts resolved in favour of the largest group
+- Verdict strengths reported per comparison
+- Ranking is always a strict total order (no cycles survive)
+- Determinism across input orderings
 - CSV loading (with and without a `date` column)
 - Output field validation
 - Full demo-data smoke test
@@ -198,6 +267,13 @@ python -m pytest tests/ -v
 - **FBS-only games recommended.**  Including FCS or non-D1 opponents may
   create unexpected edges in the game graph.  Filter to FBS-vs-FBS games
   before loading for best results.
+- **Small samples in the strength-0 fallback.**  When two teams share no
+  round-robin group, they are compared on raw overall win percentage, which
+  takes no account of how many games each played or against whom.  A 1-0 team
+  therefore outranks a 5-1 team on that comparison alone.  Ranked pairs limits
+  the damage — any chain of group-based verdicts overrides the fallback — but
+  it does not fix it.  Adding a minimum-games threshold or a strength-of-
+  schedule adjustment to this fallback is the clearest next improvement.
 - **Maximum clique complexity.**  Finding all maximal cliques is NP-hard in
   general, but FBS schedules (≈130 teams, ≈12 games each) are sparse enough
   that the Bron-Kerbosch algorithm finishes in milliseconds.

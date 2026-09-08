@@ -8,6 +8,7 @@ Coverage:
   - Multiple group tiers (larger groups ranked above smaller groups)
   - Overlapping groups (team in two cliques ranked by the larger one)
   - Independent teams with no round-robin group
+  - Conflicting pairwise verdicts resolved in favour of the largest group
   - Teams that played no games at all
   - CSV loading
   - Empty ranker
@@ -493,6 +494,86 @@ class TestDemoData(unittest.TestCase):
             self.assertEqual(self.by_team[team]["group_size"], 4)
         for team in ["Mustangs", "Bobcats", "Cougars"]:
             self.assertEqual(self.by_team[team]["group_size"], 3)
+
+
+class TestConflictingVerdicts(unittest.TestCase):
+    """When pairwise verdicts conflict, the largest group's ordering wins.
+
+    Fixture (A and C never play, and share no round-robin group):
+
+      4-group {A, B, X1, X2}   A goes 2-1, B goes 1-2   → A over B, strength 4
+      3-group {B, C, Y1}       B goes 2-0, C goes 1-1   → B over C, strength 3
+      no shared group          A is 2-1 (.667) overall,
+                               C is 3-1 (.750) overall  → C over A, strength 0
+
+    Taken pairwise these three verdicts form a cycle.  The C-over-A verdict is
+    the weakest (it rests on overall record, not on any round-robin group), so
+    it is the one discarded, leaving A > B > C.
+    """
+
+    def setUp(self):
+        self.ranker = make_ranker(
+            # 4-team round-robin group
+            ("A", "B", 30, 10),
+            ("A", "X2", 30, 10),
+            ("X1", "A", 30, 10),
+            ("B", "X1", 30, 10),
+            ("X2", "B", 30, 10),
+            ("X1", "X2", 30, 10),
+            # 3-team round-robin group sharing B
+            ("B", "C", 30, 10),
+            ("B", "Y1", 30, 10),
+            ("C", "Y1", 30, 10),
+            # padding wins that lift C's overall record above A's
+            ("C", "Z1", 30, 10),
+            ("C", "Z2", 30, 10),
+        )
+        self.names = ranked_names(self.ranker.rank())
+
+    def test_four_group_verdict_holds(self):
+        """A over B was decided in the 4-group and must survive."""
+        self.assertLess(self.names.index("A"), self.names.index("B"))
+
+    def test_three_group_verdict_holds(self):
+        """B over C was decided in the 3-group and must survive."""
+        self.assertLess(self.names.index("B"), self.names.index("C"))
+
+    def test_weak_overall_verdict_is_discarded(self):
+        """C's better overall record must not leapfrog it above A.
+
+        Regression: the previous implementation condensed the cycle and ranked
+        its members by overall record, which put C first overall.
+        """
+        self.assertLess(self.names.index("A"), self.names.index("C"))
+        self.assertNotEqual(self.names[0], "C")
+
+    def test_verdict_strengths(self):
+        """Each verdict reports the size of the group that decided it."""
+        cliques = [["A", "B", "X1", "X2"], ["B", "C", "Y1"],
+                   ["C", "Z1"], ["C", "Z2"]]
+        cmp_ab, str_ab = self.ranker._pairwise_compare("A", "B", cliques)
+        cmp_bc, str_bc = self.ranker._pairwise_compare("B", "C", cliques)
+        cmp_ac, str_ac = self.ranker._pairwise_compare("A", "C", cliques)
+        self.assertEqual((cmp_ab, str_ab[0]), (-1, 4))   # A over B, 4-group
+        self.assertEqual((cmp_bc, str_bc[0]), (-1, 3))   # B over C, 3-group
+        self.assertEqual((cmp_ac, str_ac[0]), (1, 0))    # C over A, no group
+
+    def test_ranking_is_a_strict_total_order(self):
+        """Ranked pairs must leave no cycles: every team gets a unique rank."""
+        results = self.ranker.rank()
+        ranks = [row["rank"] for row in results]
+        self.assertEqual(ranks, list(range(1, len(results) + 1)))
+        self.assertEqual(len(set(ranked_names(results))), len(results))
+
+    def test_deterministic_across_insertion_orders(self):
+        """Shuffling the input games must not change the ranking."""
+        games = [
+            ("C", "Z2", 30, 10), ("B", "X1", 30, 10), ("X1", "X2", 30, 10),
+            ("C", "Y1", 30, 10), ("A", "B", 30, 10), ("C", "Z1", 30, 10),
+            ("X1", "A", 30, 10), ("B", "Y1", 30, 10), ("A", "X2", 30, 10),
+            ("X2", "B", 30, 10), ("B", "C", 30, 10),
+        ]
+        self.assertEqual(ranked_names(make_ranker(*games).rank()), self.names)
 
 
 if __name__ == "__main__":
