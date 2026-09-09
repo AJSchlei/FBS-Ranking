@@ -44,6 +44,23 @@ def ranked_names(results):
     return [row["team"] for row in results]
 
 
+def assert_competition_ranking(case, results):
+    """Ranks must follow standard competition ranking (1, 2, 2, 4, ...).
+
+    Each rank equals one plus the number of teams ranked strictly above, so
+    ranks start at 1, never decrease, and skip exactly as far as a tie is wide.
+    """
+    ranks = [row["rank"] for row in results]
+    if not ranks:
+        return
+    case.assertEqual(ranks[0], 1, "best rank should be 1")
+    case.assertEqual(ranks, sorted(ranks), "ranks must not decrease")
+    for position, rank in enumerate(ranks):
+        strictly_above = sum(1 for r in ranks if r < rank)
+        case.assertEqual(rank, strictly_above + 1,
+                         f"rank {rank} at position {position} skips wrongly")
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -395,9 +412,13 @@ class TestResultFields(unittest.TestCase):
         for row in self.results:
             self.assertEqual(set(row.keys()), required)
 
-    def test_rank_is_sequential(self):
+    def test_ranks_follow_competition_ranking(self):
+        assert_competition_ranking(self, self.results)
+
+    def test_no_ties_when_every_team_is_separated(self):
+        """This fixture separates all three teams, so ranks run 1, 2, 3."""
         ranks = [row["rank"] for row in self.results]
-        self.assertEqual(ranks, list(range(1, len(self.results) + 1)))
+        self.assertEqual(ranks, [1, 2, 3])
 
     def test_point_diff_equals_pf_minus_pa(self):
         for row in self.results:
@@ -559,11 +580,10 @@ class TestConflictingVerdicts(unittest.TestCase):
         self.assertEqual((cmp_bc, str_bc[0]), (-1, 3))   # B over C, 3-group
         self.assertEqual((cmp_ac, str_ac[0]), (1, 0))    # C over A, no group
 
-    def test_ranking_is_a_strict_total_order(self):
-        """Ranked pairs must leave no cycles: every team gets a unique rank."""
+    def test_ranking_has_no_cycles(self):
+        """Ranked pairs must leave no cycles: ranks are a valid ordering."""
         results = self.ranker.rank()
-        ranks = [row["rank"] for row in results]
-        self.assertEqual(ranks, list(range(1, len(results) + 1)))
+        assert_competition_ranking(self, results)
         self.assertEqual(len(set(ranked_names(results))), len(results))
 
     def test_deterministic_across_insertion_orders(self):
@@ -662,6 +682,108 @@ class TestShrinkageIsFallbackOnly(unittest.TestCase):
             r.PRIOR_GAMES = prior
             self.assertEqual(ranked_names(r.rank()), expected,
                              f"in-group order changed at PRIOR_GAMES={prior}")
+
+
+class TestEqualSizedGroupsDisagree(unittest.TestCase):
+    """Two groups of the SAME size that contradict each other decide nothing.
+
+    A and B belong to two separate 4-team groups that reach opposite verdicts:
+
+        {A, B, C, D}   A 1-2, B 2-1   ->  B over A
+        {A, B, E, F}   A 3-0, B 0-3   ->  A over B
+
+    Equally strong evidence pointing both ways is not evidence, so size 4
+    decides nothing and the comparison drops to the next-smaller size — here
+    there is none, so it lands on the strength-0 overall-record fallback.
+
+    Regression: the previous implementation took whichever clique sorted first
+    alphabetically, so renaming E and F flipped the result.
+    """
+
+    GAMES = [("A", "B", 30, 10),
+             ("C", "A", 30, 10), ("D", "A", 30, 10), ("B", "C", 30, 10),
+             ("B", "D", 30, 10), ("C", "D", 30, 10),
+             ("A", "E", 30, 10), ("A", "F", 30, 10), ("E", "B", 30, 10),
+             ("F", "B", 30, 10), ("E", "F", 30, 10)]
+
+    def _cliques(self, ranker):
+        import networkx as nx
+        g = nx.Graph()
+        g.add_nodes_from(ranker.teams)
+        for x, y in ranker._game_map:
+            g.add_edge(x, y)
+        return list(nx.find_cliques(g))
+
+    def setUp(self):
+        self.ranker = make_ranker(*self.GAMES)
+        self.cliques = self._cliques(self.ranker)
+
+    def test_the_two_groups_really_do_disagree(self):
+        shared = [c for c in self.cliques if "A" in c and "B" in c]
+        self.assertEqual(sorted(len(c) for c in shared), [4, 4])
+        verdicts = {self.ranker._verdict_in_group("A", "B", c)[0] for c in shared}
+        self.assertEqual(verdicts, {-1, 1}, "fixture should contradict itself")
+
+    def test_size_four_is_discarded(self):
+        """The verdict must not carry strength 4 — that size decided nothing."""
+        _, strength = self.ranker._pairwise_compare("A", "B", self.cliques)
+        self.assertEqual(strength[0], 0,
+                         "a contradicted size must not supply the verdict")
+
+    def test_result_does_not_depend_on_the_other_members_names(self):
+        """Renaming the non-shared members must not change A vs B."""
+        renamed = []
+        for home, away, hs, as_ in self.GAMES:
+            swap = {"E": "AA", "F": "AB"}
+            renamed.append((swap.get(home, home), swap.get(away, away), hs, as_))
+        other = make_ranker(*renamed)
+        first = ranked_names(self.ranker.rank())
+        second = ranked_names(other.rank())
+        self.assertEqual(first.index("A") < first.index("B"),
+                         second.index("A") < second.index("B"))
+
+
+class TestGenuineTiesShareARank(unittest.TestCase):
+    """Teams nothing can separate get the same rank, not an alphabetical one."""
+
+    def setUp(self):
+        # Two teams with identical records against separate opponents, so no
+        # shared group and identical overall records.
+        self.ranker = make_ranker(("Xray", "X1", 30, 10),
+                                  ("Yankee", "Y1", 30, 10))
+        self.results = self.ranker.rank()
+        self.by_team = {row["team"]: row for row in self.results}
+
+    def test_pairwise_compare_reports_a_tie(self):
+        import networkx as nx
+        g = nx.Graph()
+        g.add_nodes_from(self.ranker.teams)
+        for x, y in self.ranker._game_map:
+            g.add_edge(x, y)
+        cmp, _ = self.ranker._pairwise_compare("Xray", "Yankee",
+                                               list(nx.find_cliques(g)))
+        self.assertEqual(cmp, 0, "identical teams should compare as tied")
+
+    def test_tied_teams_share_a_rank(self):
+        self.assertEqual(self.by_team["Xray"]["rank"],
+                         self.by_team["Yankee"]["rank"])
+        self.assertEqual(self.by_team["X1"]["rank"], self.by_team["Y1"]["rank"])
+
+    def test_rank_skips_after_a_tie(self):
+        """Two teams tied for 1st means the next rank is 3, not 2."""
+        self.assertEqual([row["rank"] for row in self.results], [1, 1, 3, 3])
+
+    def test_winners_still_outrank_losers(self):
+        self.assertLess(self.by_team["Xray"]["rank"], self.by_team["X1"]["rank"])
+
+    def test_alphabetical_order_carries_no_meaning(self):
+        """Renaming the alphabetically-later team must not change its rank."""
+        other = make_ranker(("Xray", "X1", 30, 10), ("Alpha", "Y1", 30, 10))
+        by_team = {row["team"]: row for row in other.rank()}
+        self.assertEqual(by_team["Alpha"]["rank"], by_team["Xray"]["rank"])
+
+    def test_competition_ranking_shape(self):
+        assert_competition_ranking(self, self.results)
 
 
 if __name__ == "__main__":

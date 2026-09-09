@@ -23,13 +23,21 @@ one made inside the larger group wins.
 
 3. Compare every pair of teams, and record how strong the comparison is
 
-   For teams A and B, walk their shared cliques from largest to smallest:
+   Bucket A and B's shared cliques BY SIZE, largest size first, and take
+   each size in turn.  Ask every clique of that size for a verdict:
 
-   a. Compare win percentage within that shared clique (descending).
+   a. Compare win percentage within the clique (descending).
    b. Still tied -> compare point differential within that clique.
-   c. Still tied -> move on to the next-smaller shared clique.
-      A smaller shared clique can only break a tie left by a larger one;
-      it can never reverse an order the larger clique established.
+
+   Then reconcile the verdicts at that size:
+
+   - They agree, or only one clique had an opinion -> that is the answer.
+   - They DISAGREE -> two equally strong groups contradict each other, so
+     the size decides nothing; drop to the next-smaller size.
+   - None could separate the teams -> drop to the next-smaller size.
+
+   A smaller group can therefore only speak where every larger one stayed
+   silent; it can never reverse an order a larger group established.
    d. No shared clique at all -> compare overall (all-games) win
       percentage REGRESSED TOWARD .500, then overall point differential,
       then team name.  See "Comparing teams with no shared group".
@@ -49,8 +57,9 @@ one made inside the larger group wins.
    construction, so no separate cycle-breaking step is needed.
 
 5. Read the final ranking off the locked ordering.
-   Teams left mutually unordered (only possible on an exact tie) fall
-   back to alphabetical order.
+   A team's rank is one plus the number of teams that outrank it, so teams
+   nothing separates SHARE a rank and the next rank skips: 1, 2, 2, 4.
+   Nothing is invented from team names to break a genuine tie.
 ```
 
 ---
@@ -81,9 +90,9 @@ Within a single shared group:
 |-------|------|
 | 1 | Win percentage within the shared round-robin group |
 | 2 | Point differential within that group |
-| 3 | Repeat levels 1-2 in the next-smaller shared group |
+| 3 | Repeat levels 1-2 at the next-smaller shared group size |
 | 4 | Shrunk overall win percentage, then overall point differential (strength 0) |
-| 5 | Alphabetical (deterministic fallback) |
+| 5 | No tiebreak — the teams are tied and share a rank |
 
 Head-to-head is not a separate level: inside a 2-team group, win percentage
 already *is* the head-to-head result, and in larger groups raw head-to-head is
@@ -92,6 +101,55 @@ deliberately avoided because it is non-transitive.
 **Cyclic h2h example** — If A beat B, B beat C, and C beat A inside one group,
 all three sit at the same win percentage, and level 2 (point differential)
 separates them.
+
+---
+
+## When equally sized groups disagree
+
+A pair of teams can belong to more than one round-robin group of the same
+size, and those groups can reach opposite conclusions:
+
+| Shared group | A's record | B's record | Verdict |
+|--------------|-----------|-----------|---------|
+| `{A, B, C, D}` | 1-2 | 2-1 | B over A |
+| `{A, B, E, F}` | 3-0 | 0-3 | A over B |
+
+Both groups are the same size, so neither outranks the other as evidence.
+The tool treats that size as having decided **nothing** and moves to the next
+size down.  Equally strong evidence pointing both ways is not evidence.
+
+The alternative — picking one of the two groups by some incidental property —
+would make the result depend on something that has nothing to do with football.
+
+---
+
+## Ties
+
+Two teams are tied when nothing in the data separates them: no shared group
+can split them, and their shrunk overall records and point differentials are
+identical.  Rather than break such a tie arbitrarily, the tool reports it.
+
+Ranks use standard competition ranking, as sports standings do — a team's rank
+is one plus the number of teams that outrank it:
+
+```
+  T1    Xray                   2     1-0      1.000   +20
+  T1    Yankee                 2     1-0      1.000   +20
+  T3    X1                     2     0-1      0.000   -20
+  T3    Y1                     2     0-1      0.000   -20
+```
+
+Two teams tied for 1st are both 1st and the next rank is 3.  The printed table
+marks a shared rank with a `T` prefix; the `rank` field in the CSV and Python
+output simply repeats the number.
+
+Teams sharing a rank are listed alphabetically so that output is stable, but
+that order carries no meaning — the equal rank NUMBER is what reports the tie.
+Renaming a team never changes its rank.
+
+Note that a tie means "no direct verdict", not "same record".  If other
+evidence orders two teams transitively (A outranks C, C outranks B), then A
+outranks B and they are not tied, even with no head-to-head between them.
 
 ---
 
@@ -227,7 +285,7 @@ for row in results:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rank` | int | Position (1 = best) |
+| `rank` | int | Position (1 = best).  Tied teams share a rank and the next rank skips: 1, 2, 2, 4 |
 | `team` | str | Team name |
 | `group_size` | int | Number of teams in the round-robin group used for ranking |
 | `wins` | int | Wins against group opponents |
@@ -298,7 +356,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-55 tests cover:
+65 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -313,6 +371,10 @@ of this file shows the latest result.
 - Shrunk win percentage arithmetic, and PRIOR_GAMES = 0 restoring raw records
 - A long record outranking a short perfect one via the fallback
 - Shrinkage never affecting comparisons made inside a group
+- Equally sized groups that disagree deciding nothing, and the result not
+  depending on the other group members' names
+- Genuine ties sharing a rank, ranks skipping after a tie, and renaming a
+  team never changing its rank
 - Ranking is always a strict total order (no cycles survive)
 - Determinism across input orderings
 - CSV loading (with and without a `date` column)
