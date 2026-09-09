@@ -31,7 +31,8 @@ one made inside the larger group wins.
       A smaller shared clique can only break a tie left by a larger one;
       it can never reverse an order the larger clique established.
    d. No shared clique at all -> compare overall (all-games) win
-      percentage, then overall point differential, then team name.
+      percentage REGRESSED TOWARD .500, then overall point differential,
+      then team name.  See "Comparing teams with no shared group".
 
    Each verdict carries a STRENGTH: the size of the group that decided it.
    Step (d) has strength 0 — the weakest evidence there is.
@@ -81,7 +82,7 @@ Within a single shared group:
 | 1 | Win percentage within the shared round-robin group |
 | 2 | Point differential within that group |
 | 3 | Repeat levels 1-2 in the next-smaller shared group |
-| 4 | Overall win percentage, then overall point differential (strength 0) |
+| 4 | Shrunk overall win percentage, then overall point differential (strength 0) |
 | 5 | Alphabetical (deterministic fallback) |
 
 Head-to-head is not a separate level: inside a 2-team group, win percentage
@@ -91,6 +92,48 @@ deliberately avoided because it is non-transitive.
 **Cyclic h2h example** — If A beat B, B beat C, and C beat A inside one group,
 all three sit at the same win percentage, and level 2 (point differential)
 separates them.
+
+---
+
+## Comparing teams with no shared group
+
+When two teams never played and belong to no common round-robin group, there
+is no group evidence to go on and the tool falls back to their overall
+records.  Raw win percentage is a poor judge here, because it ignores how many
+games each record covers -- it ranks a 2-0 team above a 7-1 team.
+
+So the fallback adds `PRIOR_GAMES` phantom games, split evenly as wins and
+losses, to every team before comparing:
+
+```
+shrunk win pct = (wins + PRIOR_GAMES/2) / (games + PRIOR_GAMES)
+```
+
+With the default of 4:
+
+| Record | Raw | Shrunk | Moved by |
+|--------|-----|--------|----------|
+| 2-0 | 1.000 | .667 | -.333 |
+| 8-0 | 1.000 | .833 | -.167 |
+| 7-1 | .875 | .750 | -.125 |
+| 3-3 | .500 | .500 | 0 |
+
+The phantom games are a large share of a short schedule and a small share of a
+long one, so a thin record is pulled hard toward .500 while a full season
+barely moves -- no cutoff, no cliff.  An even record is unmoved at any length.
+
+Two deliberate limits on this:
+
+- **It applies only to the strength-0 fallback.**  Inside a round-robin group
+  every team played every other team, so those records are already comparable
+  and are compared on raw win percentage.
+- **It is a comparison device, not a reported statistic.**  The `win_pct`
+  field in the output remains the team's real record within its group.
+
+`PRIOR_GAMES` is a class attribute on `FBSRoundRobinRanker`, so it can be
+changed (`ranker.PRIOR_GAMES = 6`) or switched off entirely by setting it to
+0, which restores raw overall win percentage.  The ordering it produces is
+stable anywhere from roughly 2 to 10.
 
 ---
 
@@ -206,22 +249,26 @@ and three Independents connected only by single cross-over games.
   Rank  Team                   Grp   W-L      Win%    Diff
   1     Aces                   8     7-0      1.000   +197
   2     Rams                   6     5-0      1.000   +98
-  3     Lions                  4     3-0      1.000   +21
-  4     Mustangs               3     2-0      1.000   +21
-  5     Bears                  8     6-1      0.857   +67
-  6     Spartans               6     4-1      0.800   +38
+  3     Bears                  8     6-1      0.857   +67
+  4     Lions                  4     3-0      1.000   +21
+  5     Spartans               6     4-1      0.800   +38
+  6     Mustangs               3     2-0      1.000   +21
   7     Colts                  8     5-2      0.714   +42
   8     Panthers               4     2-1      0.667   +0
   9     Tigers                 6     3-2      0.600   +18
   10    Dukes                  8     4-3      0.571   +0
   ...
-  23    Hawks                  8     0-7      0.000   -93
-  24    Zephyrs                6     0-5      0.000   -90
+  23    Zephyrs                6     0-5      0.000   -90
+  24    Hawks                  8     0-7      0.000   -93
 ```
 
 Note that group size does **not** dictate the tiers: the unbeaten Rams (6-team
-group) and Lions (4-team group) outrank the one-loss Bears from the 8-team
-group, while winless Hawks finish 23rd despite belonging to the largest group.
+group) and Lions (4-team group) outrank teams from the 8-team group, while
+winless Hawks finish last despite belonging to the largest group.
+
+Note also where the shrinkage bites.  Bears (7-1 overall) place above Lions
+(4-0) and Mustangs (2-0), because eight games of evidence outweigh four or
+two.  On raw win percentage both unbeaten teams would have ranked higher.
 
 The demo also includes a **three-way cyclic tie** in the Power Conference
 (Eagles, Falcons, Gators all finish 2-5, each beating one of the others) to
@@ -251,7 +298,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-46 tests cover:
+55 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -263,6 +310,9 @@ of this file shows the latest result.
 - Independent teams
 - Conflicting pairwise verdicts resolved in favour of the largest group
 - Verdict strengths reported per comparison
+- Shrunk win percentage arithmetic, and PRIOR_GAMES = 0 restoring raw records
+- A long record outranking a short perfect one via the fallback
+- Shrinkage never affecting comparisons made inside a group
 - Ranking is always a strict total order (no cycles survive)
 - Determinism across input orderings
 - CSV loading (with and without a `date` column)
@@ -281,13 +331,12 @@ of this file shows the latest result.
 - **FBS-only games recommended.**  Including FCS or non-D1 opponents may
   create unexpected edges in the game graph.  Filter to FBS-vs-FBS games
   before loading for best results.
-- **Small samples in the strength-0 fallback.**  When two teams share no
-  round-robin group, they are compared on raw overall win percentage, which
-  takes no account of how many games each played or against whom.  A 1-0 team
-  therefore outranks a 5-1 team on that comparison alone.  Ranked pairs limits
-  the damage — any chain of group-based verdicts overrides the fallback — but
-  it does not fix it.  Adding a minimum-games threshold or a strength-of-
-  schedule adjustment to this fallback is the clearest next improvement.
+- **No strength of schedule.**  The strength-0 fallback now accounts for how
+  many games a record covers, but still not for whom they were against: two
+  teams with identical shrunk records are separated by point differential, not
+  by the quality of their opponents.  An opponent-adjusted fallback (in the
+  style of RPI) is the clearest next improvement, at the cost of running a
+  second rating system alongside the round-robin logic.
 - **Maximum clique complexity.**  Finding all maximal cliques is NP-hard in
   general, but FBS schedules (≈130 teams, ≈12 games each) are sparse enough
   that the Bron-Kerbosch algorithm finishes in milliseconds.

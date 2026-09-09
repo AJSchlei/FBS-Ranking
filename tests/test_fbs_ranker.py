@@ -9,6 +9,7 @@ Coverage:
   - Overlapping groups (team in two cliques ranked by the larger one)
   - Independent teams with no round-robin group
   - Conflicting pairwise verdicts resolved in favour of the largest group
+  - Overall records regressed toward .500 before the strength-0 fallback
   - Teams that played no games at all
   - CSV loading
   - Empty ranker
@@ -574,6 +575,93 @@ class TestConflictingVerdicts(unittest.TestCase):
             ("X2", "B", 30, 10), ("B", "C", 30, 10),
         ]
         self.assertEqual(ranked_names(make_ranker(*games).rank()), self.names)
+
+
+class TestShrunkWinPct(unittest.TestCase):
+    """The strength-0 fallback regresses overall records toward .500."""
+
+    def setUp(self):
+        self.r = FBSRoundRobinRanker()
+
+    def test_arithmetic(self):
+        """(wins + k/2) / (games + k), with the default k of 4."""
+        self.assertAlmostEqual(self.r._shrunk_win_pct(2, 0), 4 / 6)    # .667
+        self.assertAlmostEqual(self.r._shrunk_win_pct(7, 1), 9 / 12)   # .750
+        self.assertAlmostEqual(self.r._shrunk_win_pct(8, 0), 10 / 12)  # .833
+        self.assertAlmostEqual(self.r._shrunk_win_pct(0, 3), 2 / 7)    # .286
+
+    def test_short_records_move_further(self):
+        """A 2-0 record is pulled further from 1.000 than an 8-0 record."""
+        short_drop = 1.0 - self.r._shrunk_win_pct(2, 0)
+        long_drop = 1.0 - self.r._shrunk_win_pct(8, 0)
+        self.assertGreater(short_drop, long_drop)
+
+    def test_500_is_the_fixed_point(self):
+        """An even record stays at .500 no matter how few games it covers."""
+        for w in (1, 3, 20):
+            self.assertAlmostEqual(self.r._shrunk_win_pct(w, w), 0.5)
+
+    def test_prior_games_zero_restores_raw_win_pct(self):
+        self.r.PRIOR_GAMES = 0
+        for w, l in [(2, 0), (7, 1), (0, 3), (0, 0)]:
+            self.assertAlmostEqual(self.r._shrunk_win_pct(w, l),
+                                   self.r._win_pct(w, l))
+
+
+class TestFallbackUsesShrunkRecord(unittest.TestCase):
+    """Teams sharing no round-robin group are compared on shrunk records.
+
+    P goes 7-1 against eight opponents who never play each other; Q goes 2-0
+    against two more. P and Q never meet and share no group, so the strength-0
+    fallback decides them.
+
+      raw:     Q 1.000 beats P .875   -> Q would rank first
+      shrunk:  P  .750 beats Q  .667  -> P ranks first
+    """
+
+    def setUp(self):
+        games = [("P", f"P{i}", 30, 10) for i in range(1, 8)]   # P wins seven
+        games.append(("P8", "P", 30, 10))                       # P loses one
+        games += [("Q", "Q1", 30, 10), ("Q", "Q2", 30, 10)]     # Q wins two
+        self.ranker = make_ranker(*games)
+        self.names = ranked_names(self.ranker.rank())
+
+    def test_records_are_as_designed(self):
+        self.assertEqual(self.ranker._overall_record("P")[:2], (7, 1))
+        self.assertEqual(self.ranker._overall_record("Q")[:2], (2, 0))
+
+    def test_raw_win_pct_would_favour_the_shorter_record(self):
+        self.assertGreater(self.ranker._win_pct(2, 0), self.ranker._win_pct(7, 1))
+
+    def test_longer_record_wins_after_shrinking(self):
+        self.assertLess(self.names.index("P"), self.names.index("Q"))
+
+    def test_raw_comparison_flips_the_result(self):
+        """With PRIOR_GAMES back to 0, the old 2-0-over-7-1 ordering returns."""
+        self.ranker.PRIOR_GAMES = 0
+        raw = ranked_names(self.ranker.rank())
+        self.assertLess(raw.index("Q"), raw.index("P"))
+
+
+class TestShrinkageIsFallbackOnly(unittest.TestCase):
+    """Comparisons inside a round-robin group ignore the shrinkage entirely.
+
+    Every member of a group played every other member, so their in-group
+    records are already directly comparable and need no correction.
+    """
+
+    def setUp(self):
+        # 3-team round-robin: G1 2-0, G2 1-1, G3 0-2.
+        self.games = [("G1", "G2", 30, 10), ("G1", "G3", 30, 10),
+                      ("G2", "G3", 30, 10)]
+
+    def test_in_group_order_is_unchanged_by_an_extreme_prior(self):
+        expected = ["G1", "G2", "G3"]
+        for prior in (0, 4, 1000):
+            r = make_ranker(*self.games)
+            r.PRIOR_GAMES = prior
+            self.assertEqual(ranked_names(r.rank()), expected,
+                             f"in-group order changed at PRIOR_GAMES={prior}")
 
 
 if __name__ == "__main__":

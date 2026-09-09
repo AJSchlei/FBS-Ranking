@@ -17,8 +17,9 @@ Algorithm:
        c. Still tied → repeat steps a-b with the next-smaller shared clique.
           A smaller shared clique can only break an existing tie; it can never
           reverse an order established by a larger clique.
-       d. No shared clique → compare by overall (all-games) win percentage,
-          then overall point differential, then alphabetical name.
+       d. No shared clique → compare by overall (all-games) win percentage
+          regressed toward .500 (see _shrunk_win_pct), then overall point
+          differential, then alphabetical name.
      Each comparison records its STRENGTH: the size of the group that decided
      it (0 for the overall-record fallback in step d).
   4. Combine the pairwise results into one global order using Tideman's
@@ -59,7 +60,17 @@ class FBSRoundRobinRanker:
 
     Attributes:
         teams (set): All team names seen in the loaded game data.
+
+    Class attributes:
+        PRIOR_GAMES: Phantom .500 games added to each team's overall record
+            before comparing two teams that share no round-robin group.
+            See _shrunk_win_pct.  Set to 0 to compare on raw overall record.
     """
+
+    # Four is enough to stop a 2-0 record outranking a 7-1 one, and small
+    # enough to leave full-season records essentially untouched.  The ordering
+    # it produces is stable for anything from roughly 2 to 10.
+    PRIOR_GAMES = 4.0
 
     def __init__(self):
         self.teams: set = set()
@@ -140,6 +151,33 @@ class FBSRoundRobinRanker:
         total = wins + losses
         return wins / total if total > 0 else 0.0
 
+    def _shrunk_win_pct(self, wins: int, losses: int) -> float:
+        """Overall win percentage regressed toward .500 by PRIOR_GAMES games.
+
+        Raw win percentage ranks a 2-0 team above a 7-1 team, which only holds
+        up if two games say as much as eight.  Adding a fixed number of
+        phantom .500 games corrects that without a hard cutoff: the phantom
+        games are a large share of a short schedule and a small share of a
+        long one, so a team with little evidence is pulled toward .500 while a
+        team with plenty barely moves.
+
+            2-0  ->  (2 + 2) / (2 + 4)  =  .667
+            7-1  ->  (7 + 2) / (8 + 4)  =  .750
+
+        This is used ONLY for the strength-0 fallback, where the two teams
+        share no round-robin group and may have played schedules of wildly
+        different lengths.  Comparisons inside a group are deliberately left
+        on raw win percentage: every member of a group played every other
+        member, so those records are already directly comparable.
+
+        Setting PRIOR_GAMES to 0 makes this identical to _win_pct.
+        """
+        k = float(self.PRIOR_GAMES)
+        total = wins + losses
+        if total + k <= 0:
+            return 0.0
+        return (wins + k / 2.0) / (total + k)
+
     def _overall_record(self, team: str) -> tuple:
         """Return (wins, losses, points_for, points_against) across all games."""
         w = l = pf = pa = 0
@@ -175,7 +213,8 @@ class FBSRoundRobinRanker:
              A smaller clique can only break an existing tie — it can never
              reverse an ordering established by a larger clique.
           3. If no shared clique (or all shared cliques are completely tied),
-             fall back to overall win pct, then overall point diff, then name.
+             fall back to overall win pct regressed toward .500 by
+             PRIOR_GAMES phantom games, then overall point diff, then name.
              This fallback reports group_size 0 — the weakest strength there
              is — so any chain of group-based orderings overrides it.
         """
@@ -214,8 +253,8 @@ class FBSRoundRobinRanker:
         ow_a, ol_a, opf_a, opa_a = self._overall_record(team_a)
         ow_b, ol_b, opf_b, opa_b = self._overall_record(team_b)
 
-        wpc_a = self._win_pct(ow_a, ol_a)
-        wpc_b = self._win_pct(ow_b, ol_b)
+        wpc_a = self._shrunk_win_pct(ow_a, ol_a)
+        wpc_b = self._shrunk_win_pct(ow_b, ol_b)
         diff_a = opf_a - opa_a
         diff_b = opf_b - opa_b
 
