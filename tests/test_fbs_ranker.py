@@ -8,6 +8,8 @@ Coverage:
   - Multiple group tiers (larger groups ranked above smaller groups)
   - Overlapping groups (team in two cliques ranked by the larger one)
   - Independent teams with no round-robin group
+  - Conflicting pairwise verdicts resolved in favour of the largest group
+  - Overall records regressed toward .500 before the strength-0 fallback
   - Teams that played no games at all
   - CSV loading
   - Empty ranker
@@ -40,6 +42,23 @@ def make_ranker(*games):
 def ranked_names(results):
     """Return just the ordered list of team names from rank() output."""
     return [row["team"] for row in results]
+
+
+def assert_competition_ranking(case, results):
+    """Ranks must follow standard competition ranking (1, 2, 2, 4, ...).
+
+    Each rank equals one plus the number of teams ranked strictly above, so
+    ranks start at 1, never decrease, and skip exactly as far as a tie is wide.
+    """
+    ranks = [row["rank"] for row in results]
+    if not ranks:
+        return
+    case.assertEqual(ranks[0], 1, "best rank should be 1")
+    case.assertEqual(ranks, sorted(ranks), "ranks must not decrease")
+    for position, rank in enumerate(ranks):
+        strictly_above = sum(1 for r in ranks if r < rank)
+        case.assertEqual(rank, strictly_above + 1,
+                         f"rank {rank} at position {position} skips wrongly")
 
 
 # ---------------------------------------------------------------------------
@@ -393,9 +412,13 @@ class TestResultFields(unittest.TestCase):
         for row in self.results:
             self.assertEqual(set(row.keys()), required)
 
-    def test_rank_is_sequential(self):
+    def test_ranks_follow_competition_ranking(self):
+        assert_competition_ranking(self, self.results)
+
+    def test_no_ties_when_every_team_is_separated(self):
+        """This fixture separates all three teams, so ranks run 1, 2, 3."""
         ranks = [row["rank"] for row in self.results]
-        self.assertEqual(ranks, list(range(1, len(self.results) + 1)))
+        self.assertEqual(ranks, [1, 2, 3])
 
     def test_point_diff_equals_pf_minus_pa(self):
         for row in self.results:
@@ -493,6 +516,274 @@ class TestDemoData(unittest.TestCase):
             self.assertEqual(self.by_team[team]["group_size"], 4)
         for team in ["Mustangs", "Bobcats", "Cougars"]:
             self.assertEqual(self.by_team[team]["group_size"], 3)
+
+
+class TestConflictingVerdicts(unittest.TestCase):
+    """When pairwise verdicts conflict, the largest group's ordering wins.
+
+    Fixture (A and C never play, and share no round-robin group):
+
+      4-group {A, B, X1, X2}   A goes 2-1, B goes 1-2   → A over B, strength 4
+      3-group {B, C, Y1}       B goes 2-0, C goes 1-1   → B over C, strength 3
+      no shared group          A is 2-1 (.667) overall,
+                               C is 3-1 (.750) overall  → C over A, strength 0
+
+    Taken pairwise these three verdicts form a cycle.  The C-over-A verdict is
+    the weakest (it rests on overall record, not on any round-robin group), so
+    it is the one discarded, leaving A > B > C.
+    """
+
+    def setUp(self):
+        self.ranker = make_ranker(
+            # 4-team round-robin group
+            ("A", "B", 30, 10),
+            ("A", "X2", 30, 10),
+            ("X1", "A", 30, 10),
+            ("B", "X1", 30, 10),
+            ("X2", "B", 30, 10),
+            ("X1", "X2", 30, 10),
+            # 3-team round-robin group sharing B
+            ("B", "C", 30, 10),
+            ("B", "Y1", 30, 10),
+            ("C", "Y1", 30, 10),
+            # padding wins that lift C's overall record above A's
+            ("C", "Z1", 30, 10),
+            ("C", "Z2", 30, 10),
+        )
+        self.names = ranked_names(self.ranker.rank())
+
+    def test_four_group_verdict_holds(self):
+        """A over B was decided in the 4-group and must survive."""
+        self.assertLess(self.names.index("A"), self.names.index("B"))
+
+    def test_three_group_verdict_holds(self):
+        """B over C was decided in the 3-group and must survive."""
+        self.assertLess(self.names.index("B"), self.names.index("C"))
+
+    def test_weak_overall_verdict_is_discarded(self):
+        """C's better overall record must not leapfrog it above A.
+
+        Regression: the previous implementation condensed the cycle and ranked
+        its members by overall record, which put C first overall.
+        """
+        self.assertLess(self.names.index("A"), self.names.index("C"))
+        self.assertNotEqual(self.names[0], "C")
+
+    def test_verdict_strengths(self):
+        """Each verdict reports the size of the group that decided it."""
+        cliques = [["A", "B", "X1", "X2"], ["B", "C", "Y1"],
+                   ["C", "Z1"], ["C", "Z2"]]
+        cmp_ab, str_ab = self.ranker._pairwise_compare("A", "B", cliques)
+        cmp_bc, str_bc = self.ranker._pairwise_compare("B", "C", cliques)
+        cmp_ac, str_ac = self.ranker._pairwise_compare("A", "C", cliques)
+        self.assertEqual((cmp_ab, str_ab[0]), (-1, 4))   # A over B, 4-group
+        self.assertEqual((cmp_bc, str_bc[0]), (-1, 3))   # B over C, 3-group
+        self.assertEqual((cmp_ac, str_ac[0]), (1, 0))    # C over A, no group
+
+    def test_ranking_has_no_cycles(self):
+        """Ranked pairs must leave no cycles: ranks are a valid ordering."""
+        results = self.ranker.rank()
+        assert_competition_ranking(self, results)
+        self.assertEqual(len(set(ranked_names(results))), len(results))
+
+    def test_deterministic_across_insertion_orders(self):
+        """Shuffling the input games must not change the ranking."""
+        games = [
+            ("C", "Z2", 30, 10), ("B", "X1", 30, 10), ("X1", "X2", 30, 10),
+            ("C", "Y1", 30, 10), ("A", "B", 30, 10), ("C", "Z1", 30, 10),
+            ("X1", "A", 30, 10), ("B", "Y1", 30, 10), ("A", "X2", 30, 10),
+            ("X2", "B", 30, 10), ("B", "C", 30, 10),
+        ]
+        self.assertEqual(ranked_names(make_ranker(*games).rank()), self.names)
+
+
+class TestShrunkWinPct(unittest.TestCase):
+    """The strength-0 fallback regresses overall records toward .500."""
+
+    def setUp(self):
+        self.r = FBSRoundRobinRanker()
+
+    def test_arithmetic(self):
+        """(wins + k/2) / (games + k), with the default k of 4."""
+        self.assertAlmostEqual(self.r._shrunk_win_pct(2, 0), 4 / 6)    # .667
+        self.assertAlmostEqual(self.r._shrunk_win_pct(7, 1), 9 / 12)   # .750
+        self.assertAlmostEqual(self.r._shrunk_win_pct(8, 0), 10 / 12)  # .833
+        self.assertAlmostEqual(self.r._shrunk_win_pct(0, 3), 2 / 7)    # .286
+
+    def test_short_records_move_further(self):
+        """A 2-0 record is pulled further from 1.000 than an 8-0 record."""
+        short_drop = 1.0 - self.r._shrunk_win_pct(2, 0)
+        long_drop = 1.0 - self.r._shrunk_win_pct(8, 0)
+        self.assertGreater(short_drop, long_drop)
+
+    def test_500_is_the_fixed_point(self):
+        """An even record stays at .500 no matter how few games it covers."""
+        for w in (1, 3, 20):
+            self.assertAlmostEqual(self.r._shrunk_win_pct(w, w), 0.5)
+
+    def test_prior_games_zero_restores_raw_win_pct(self):
+        self.r.PRIOR_GAMES = 0
+        for w, l in [(2, 0), (7, 1), (0, 3), (0, 0)]:
+            self.assertAlmostEqual(self.r._shrunk_win_pct(w, l),
+                                   self.r._win_pct(w, l))
+
+
+class TestFallbackUsesShrunkRecord(unittest.TestCase):
+    """Teams sharing no round-robin group are compared on shrunk records.
+
+    P goes 7-1 against eight opponents who never play each other; Q goes 2-0
+    against two more. P and Q never meet and share no group, so the strength-0
+    fallback decides them.
+
+      raw:     Q 1.000 beats P .875   -> Q would rank first
+      shrunk:  P  .750 beats Q  .667  -> P ranks first
+    """
+
+    def setUp(self):
+        games = [("P", f"P{i}", 30, 10) for i in range(1, 8)]   # P wins seven
+        games.append(("P8", "P", 30, 10))                       # P loses one
+        games += [("Q", "Q1", 30, 10), ("Q", "Q2", 30, 10)]     # Q wins two
+        self.ranker = make_ranker(*games)
+        self.names = ranked_names(self.ranker.rank())
+
+    def test_records_are_as_designed(self):
+        self.assertEqual(self.ranker._overall_record("P")[:2], (7, 1))
+        self.assertEqual(self.ranker._overall_record("Q")[:2], (2, 0))
+
+    def test_raw_win_pct_would_favour_the_shorter_record(self):
+        self.assertGreater(self.ranker._win_pct(2, 0), self.ranker._win_pct(7, 1))
+
+    def test_longer_record_wins_after_shrinking(self):
+        self.assertLess(self.names.index("P"), self.names.index("Q"))
+
+    def test_raw_comparison_flips_the_result(self):
+        """With PRIOR_GAMES back to 0, the old 2-0-over-7-1 ordering returns."""
+        self.ranker.PRIOR_GAMES = 0
+        raw = ranked_names(self.ranker.rank())
+        self.assertLess(raw.index("Q"), raw.index("P"))
+
+
+class TestShrinkageIsFallbackOnly(unittest.TestCase):
+    """Comparisons inside a round-robin group ignore the shrinkage entirely.
+
+    Every member of a group played every other member, so their in-group
+    records are already directly comparable and need no correction.
+    """
+
+    def setUp(self):
+        # 3-team round-robin: G1 2-0, G2 1-1, G3 0-2.
+        self.games = [("G1", "G2", 30, 10), ("G1", "G3", 30, 10),
+                      ("G2", "G3", 30, 10)]
+
+    def test_in_group_order_is_unchanged_by_an_extreme_prior(self):
+        expected = ["G1", "G2", "G3"]
+        for prior in (0, 4, 1000):
+            r = make_ranker(*self.games)
+            r.PRIOR_GAMES = prior
+            self.assertEqual(ranked_names(r.rank()), expected,
+                             f"in-group order changed at PRIOR_GAMES={prior}")
+
+
+class TestEqualSizedGroupsDisagree(unittest.TestCase):
+    """Two groups of the SAME size that contradict each other decide nothing.
+
+    A and B belong to two separate 4-team groups that reach opposite verdicts:
+
+        {A, B, C, D}   A 1-2, B 2-1   ->  B over A
+        {A, B, E, F}   A 3-0, B 0-3   ->  A over B
+
+    Equally strong evidence pointing both ways is not evidence, so size 4
+    decides nothing and the comparison drops to the next-smaller size — here
+    there is none, so it lands on the strength-0 overall-record fallback.
+
+    Regression: the previous implementation took whichever clique sorted first
+    alphabetically, so renaming E and F flipped the result.
+    """
+
+    GAMES = [("A", "B", 30, 10),
+             ("C", "A", 30, 10), ("D", "A", 30, 10), ("B", "C", 30, 10),
+             ("B", "D", 30, 10), ("C", "D", 30, 10),
+             ("A", "E", 30, 10), ("A", "F", 30, 10), ("E", "B", 30, 10),
+             ("F", "B", 30, 10), ("E", "F", 30, 10)]
+
+    def _cliques(self, ranker):
+        import networkx as nx
+        g = nx.Graph()
+        g.add_nodes_from(ranker.teams)
+        for x, y in ranker._game_map:
+            g.add_edge(x, y)
+        return list(nx.find_cliques(g))
+
+    def setUp(self):
+        self.ranker = make_ranker(*self.GAMES)
+        self.cliques = self._cliques(self.ranker)
+
+    def test_the_two_groups_really_do_disagree(self):
+        shared = [c for c in self.cliques if "A" in c and "B" in c]
+        self.assertEqual(sorted(len(c) for c in shared), [4, 4])
+        verdicts = {self.ranker._verdict_in_group("A", "B", c)[0] for c in shared}
+        self.assertEqual(verdicts, {-1, 1}, "fixture should contradict itself")
+
+    def test_size_four_is_discarded(self):
+        """The verdict must not carry strength 4 — that size decided nothing."""
+        _, strength = self.ranker._pairwise_compare("A", "B", self.cliques)
+        self.assertEqual(strength[0], 0,
+                         "a contradicted size must not supply the verdict")
+
+    def test_result_does_not_depend_on_the_other_members_names(self):
+        """Renaming the non-shared members must not change A vs B."""
+        renamed = []
+        for home, away, hs, as_ in self.GAMES:
+            swap = {"E": "AA", "F": "AB"}
+            renamed.append((swap.get(home, home), swap.get(away, away), hs, as_))
+        other = make_ranker(*renamed)
+        first = ranked_names(self.ranker.rank())
+        second = ranked_names(other.rank())
+        self.assertEqual(first.index("A") < first.index("B"),
+                         second.index("A") < second.index("B"))
+
+
+class TestGenuineTiesShareARank(unittest.TestCase):
+    """Teams nothing can separate get the same rank, not an alphabetical one."""
+
+    def setUp(self):
+        # Two teams with identical records against separate opponents, so no
+        # shared group and identical overall records.
+        self.ranker = make_ranker(("Xray", "X1", 30, 10),
+                                  ("Yankee", "Y1", 30, 10))
+        self.results = self.ranker.rank()
+        self.by_team = {row["team"]: row for row in self.results}
+
+    def test_pairwise_compare_reports_a_tie(self):
+        import networkx as nx
+        g = nx.Graph()
+        g.add_nodes_from(self.ranker.teams)
+        for x, y in self.ranker._game_map:
+            g.add_edge(x, y)
+        cmp, _ = self.ranker._pairwise_compare("Xray", "Yankee",
+                                               list(nx.find_cliques(g)))
+        self.assertEqual(cmp, 0, "identical teams should compare as tied")
+
+    def test_tied_teams_share_a_rank(self):
+        self.assertEqual(self.by_team["Xray"]["rank"],
+                         self.by_team["Yankee"]["rank"])
+        self.assertEqual(self.by_team["X1"]["rank"], self.by_team["Y1"]["rank"])
+
+    def test_rank_skips_after_a_tie(self):
+        """Two teams tied for 1st means the next rank is 3, not 2."""
+        self.assertEqual([row["rank"] for row in self.results], [1, 1, 3, 3])
+
+    def test_winners_still_outrank_losers(self):
+        self.assertLess(self.by_team["Xray"]["rank"], self.by_team["X1"]["rank"])
+
+    def test_alphabetical_order_carries_no_meaning(self):
+        """Renaming the alphabetically-later team must not change its rank."""
+        other = make_ranker(("Xray", "X1", 30, 10), ("Alpha", "Y1", 30, 10))
+        by_team = {row["team"]: row for row in other.rank()}
+        self.assertEqual(by_team["Alpha"]["rank"], by_team["Xray"]["rank"])
+
+    def test_competition_ranking_shape(self):
+        assert_competition_ranking(self, self.results)
 
 
 if __name__ == "__main__":
