@@ -1,5 +1,7 @@
 # FBS Round-Robin Ranking Tool
 
+[![Tests](https://github.com/AJSchlei/FBS-Ranking/actions/workflows/tests.yml/badge.svg)](https://github.com/AJSchlei/FBS-Ranking/actions/workflows/tests.yml)
+
 Ranks FBS football teams by discovering **round-robin groups** — sets of teams
 where every team played every other team — and using those groups as the
 evidence for every head-to-head judgement.  Two teams are compared inside the
@@ -234,8 +236,20 @@ case directly.
 ## Running tests
 
 ```bash
+pip install pytest          # not needed to run the ranker, only the tests
 python -m pytest tests/ -v
 ```
+
+The tests are written with the standard library's `unittest`, so they also run
+with no extra packages installed:
+
+```bash
+python -m unittest discover -s tests
+```
+
+Every push and pull request runs the suite automatically on Python 3.9 through
+3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
+of this file shows the latest result.
 
 46 tests cover:
 
