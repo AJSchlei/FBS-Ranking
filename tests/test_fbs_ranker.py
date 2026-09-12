@@ -9,6 +9,7 @@ Coverage:
   - Overlapping groups (team in two cliques ranked by the larger one)
   - Independent teams with no round-robin group
   - Conflicting pairwise verdicts resolved in favour of the largest group
+  - Duplicate meetings between the same pair detected rather than overwritten
   - Overall records regressed toward .500 before the strength-0 fallback
   - Teams that played no games at all
   - CSV loading
@@ -24,7 +25,8 @@ import sys
 
 # Allow running tests from the repo root without installing the package.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from fbs_ranker import FBSRoundRobinRanker, generate_demo_games
+from fbs_ranker import (FBSRoundRobinRanker, DuplicateGameError,
+                        generate_demo_games)
 
 
 # ---------------------------------------------------------------------------
@@ -784,6 +786,122 @@ class TestGenuineTiesShareARank(unittest.TestCase):
 
     def test_competition_ranking_shape(self):
         assert_competition_ranking(self, self.results)
+
+
+class TestDuplicateDetection(unittest.TestCase):
+    """A second meeting between the same pair is refused, not silently kept.
+
+    The ranker stores one result per pair, so an unnoticed duplicate would make
+    the rankings depend on row order.  Real seasons hit this: a conference
+    championship game is often a rematch of a regular-season meeting.
+    """
+
+    def test_same_pair_twice_raises(self):
+        r = FBSRoundRobinRanker()
+        r.add_game("Alabama", "Georgia", 30, 10)
+        with self.assertRaises(DuplicateGameError):
+            r.add_game("Alabama", "Georgia", 21, 17)
+
+    def test_reversed_order_is_still_the_same_pair(self):
+        """Home and away swapped is a rematch, not a different fixture."""
+        r = FBSRoundRobinRanker()
+        r.add_game("Alabama", "Georgia", 30, 10)
+        with self.assertRaises(DuplicateGameError):
+            r.add_game("Georgia", "Alabama", 21, 17)
+
+    def test_identical_row_repeated_also_raises(self):
+        r = FBSRoundRobinRanker()
+        r.add_game("Alabama", "Georgia", 30, 10)
+        with self.assertRaises(DuplicateGameError):
+            r.add_game("Alabama", "Georgia", 30, 10)
+
+    def test_message_names_both_teams_and_both_results(self):
+        r = FBSRoundRobinRanker()
+        r.add_game("Alabama", "Georgia", 30, 10)
+        with self.assertRaises(DuplicateGameError) as ctx:
+            r.add_game("Georgia", "Alabama", 21, 17)
+        message = str(ctx.exception)
+        for fragment in ("Alabama", "Georgia", "30-10", "17-21"):
+            self.assertIn(fragment, message)
+
+    def test_rejected_duplicate_leaves_the_data_untouched(self):
+        r = FBSRoundRobinRanker()
+        r.add_game("Alabama", "Georgia", 30, 10)
+        with self.assertRaises(DuplicateGameError):
+            r.add_game("Georgia", "Alabama", 21, 17)
+        self.assertEqual(r.get_result("Alabama", "Georgia"), (30, 10))
+        self.assertEqual(len(r._game_map), 1)
+        self.assertEqual(r.teams, {"Alabama", "Georgia"})
+
+    def test_keep_first_ignores_the_rematch(self):
+        r = FBSRoundRobinRanker(on_duplicate="keep_first")
+        r.add_game("Alabama", "Georgia", 30, 10)
+        r.add_game("Georgia", "Alabama", 21, 17)
+        self.assertEqual(r.get_result("Alabama", "Georgia"), (30, 10))
+
+    def test_keep_last_takes_the_rematch(self):
+        r = FBSRoundRobinRanker(on_duplicate="keep_last")
+        r.add_game("Alabama", "Georgia", 30, 10)
+        r.add_game("Georgia", "Alabama", 21, 17)
+        self.assertEqual(r.get_result("Alabama", "Georgia"), (17, 21))
+
+    def test_unknown_policy_is_rejected_at_construction(self):
+        with self.assertRaises(ValueError):
+            FBSRoundRobinRanker(on_duplicate="whatever")
+
+    def test_distinct_pairs_are_unaffected(self):
+        """Normal data with no rematches still loads."""
+        r = make_ranker(("A", "B", 30, 10), ("B", "C", 30, 10), ("A", "C", 30, 10))
+        self.assertEqual(len(r._game_map), 3)
+        self.assertEqual(len(r.rank()), 3)
+
+
+class TestCsvDuplicateReporting(unittest.TestCase):
+    """A duplicate found in a CSV names the file and line."""
+
+    def _write(self, rows):
+        fh = tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False,
+                                         newline="", encoding="utf-8")
+        writer = csv.writer(fh)
+        writer.writerow(["date", "home_team", "home_score", "away_team", "away_score"])
+        writer.writerows(rows)
+        fh.close()
+        self.addCleanup(os.unlink, fh.name)
+        return fh.name
+
+    def test_duplicate_row_reports_file_and_line(self):
+        path = self._write([
+            ["2025-10-11", "Texas", 31, "Oklahoma", 24],
+            ["2025-11-01", "Ohio State", 28, "Michigan", 20],
+            ["2025-12-06", "Oklahoma", 27, "Texas", 21],   # rematch, line 4
+        ])
+        r = FBSRoundRobinRanker()
+        with self.assertRaises(DuplicateGameError) as ctx:
+            r.load_csv(path)
+        message = str(ctx.exception)
+        self.assertIn("line 4", message)
+        self.assertIn(path, message)
+        self.assertIn("Oklahoma", message)
+        self.assertIn("Texas", message)
+
+    def test_clean_csv_still_loads(self):
+        path = self._write([
+            ["2025-10-11", "Texas", 31, "Oklahoma", 24],
+            ["2025-11-01", "Ohio State", 28, "Michigan", 20],
+        ])
+        r = FBSRoundRobinRanker()
+        r.load_csv(path)
+        self.assertEqual(len(r._game_map), 2)
+        self.assertEqual(len(r.rank()), 4)
+
+    def test_keep_last_loads_a_csv_with_a_rematch(self):
+        path = self._write([
+            ["2025-10-11", "Texas", 31, "Oklahoma", 24],
+            ["2025-12-06", "Oklahoma", 27, "Texas", 21],
+        ])
+        r = FBSRoundRobinRanker(on_duplicate="keep_last")
+        r.load_csv(path)
+        self.assertEqual(r.get_result("Oklahoma", "Texas"), (27, 21))
 
 
 if __name__ == "__main__":

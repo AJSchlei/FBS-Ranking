@@ -56,9 +56,16 @@ from itertools import groupby
 import networkx as nx
 
 
-# ---------------------------------------------------------------------------
-# Core ranking engine
-# ---------------------------------------------------------------------------
+class DuplicateGameError(ValueError):
+    """Raised when a dataset contains two games between the same pair of teams.
+
+    The ranker stores one result per pair, so a second meeting would overwrite
+    the first and make the rankings depend on input order.  Rather than decide
+    silently which game counts, loading stops and asks.
+
+    Real seasons do hit this: a conference championship game is often a rematch
+    of a regular-season meeting.
+    """
 
 class FBSRoundRobinRanker:
     """
@@ -66,6 +73,8 @@ class FBSRoundRobinRanker:
 
     Attributes:
         teams (set): All team names seen in the loaded game data.
+        on_duplicate (str): What to do when the same pair of teams appears
+            twice — "error" (default), "keep_first", or "keep_last".
 
     Class attributes:
         PRIOR_GAMES: Phantom .500 games added to each team's overall record
@@ -78,7 +87,18 @@ class FBSRoundRobinRanker:
     # it produces is stable for anything from roughly 2 to 10.
     PRIOR_GAMES = 4.0
 
-    def __init__(self):
+    #: What to do when a dataset contains two games between the same pair.
+    #: "error" (default) refuses the dataset, "keep_first" ignores the later
+    #: game, "keep_last" lets it overwrite the earlier one.
+    DUPLICATE_POLICIES = ("error", "keep_first", "keep_last")
+
+    def __init__(self, on_duplicate: str = "error"):
+        if on_duplicate not in self.DUPLICATE_POLICIES:
+            raise ValueError(
+                f"on_duplicate must be one of {self.DUPLICATE_POLICIES}, "
+                f"got {on_duplicate!r}"
+            )
+        self.on_duplicate = on_duplicate
         self.teams: set = set()
         # Canonical key: (team_a, team_b) with team_a < team_b (lexicographic).
         # Value: (score_for_team_a, score_for_team_b)
@@ -94,6 +114,11 @@ class FBSRoundRobinRanker:
         """Load game results from a CSV file.
 
         Required columns: home_team, home_score, away_team, away_score
+
+        Raises:
+            DuplicateGameError: if two rows describe the same pair of teams and
+                on_duplicate is "error".  The message names the offending line
+                so it can be found in the file.
         """
         with open(filepath, newline="", encoding="utf-8") as fh:
             reader = csv.DictReader(fh)
@@ -102,19 +127,44 @@ class FBSRoundRobinRanker:
                 away = row["away_team"].strip()
                 home_score = int(row["home_score"])
                 away_score = int(row["away_score"])
-                self._add_game(home, away, home_score, away_score)
+                try:
+                    self._add_game(home, away, home_score, away_score)
+                except DuplicateGameError as exc:
+                    raise DuplicateGameError(
+                        f"{filepath} line {reader.line_num}: {exc}"
+                    ) from None
 
     def add_game(self, home: str, away: str, home_score: int, away_score: int) -> None:
         """Add a single game result programmatically."""
         self._add_game(home, away, home_score, away_score)
 
     def _add_game(self, team_a: str, team_b: str, score_a: int, score_b: int) -> None:
+        # Canonicalise so A-vs-B and B-vs-A land on the same key.
+        if team_a < team_b:
+            key, value = (team_a, team_b), (score_a, score_b)
+        else:
+            key, value = (team_b, team_a), (score_b, score_a)
+
+        if key in self._game_map:
+            if self.on_duplicate == "keep_first":
+                return
+            if self.on_duplicate == "error":
+                prev_a, prev_b = self._game_map[key]
+                raise DuplicateGameError(
+                    f"{key[0]} and {key[1]} appear twice in this dataset "
+                    f"({key[0]} {prev_a}-{prev_b} {key[1]}, then "
+                    f"{key[0]} {value[0]}-{value[1]} {key[1]}). "
+                    f"Only one game per pair is supported, so the second "
+                    f"result would silently replace the first. Remove one of "
+                    f"them, or construct the ranker with "
+                    f"on_duplicate='keep_first' or 'keep_last' to choose "
+                    f"which meeting counts."
+                )
+            # "keep_last" falls through and overwrites.
+
         self.teams.add(team_a)
         self.teams.add(team_b)
-        if team_a < team_b:
-            self._game_map[(team_a, team_b)] = (score_a, score_b)
-        else:
-            self._game_map[(team_b, team_a)] = (score_b, score_a)
+        self._game_map[key] = value
 
     # ------------------------------------------------------------------
     # Game result helpers
@@ -696,7 +746,11 @@ CSV input format:
         print(f"Demo games written to: {demo_csv}")
     else:
         print(f"Loading games from: {args.input}")
-        ranker.load_csv(args.input)
+        try:
+            ranker.load_csv(args.input)
+        except DuplicateGameError as exc:
+            print(f"\nError: {exc}", file=sys.stderr)
+            sys.exit(1)
 
     print(f"Teams: {len(ranker.teams)}  |  Games: {len(ranker._game_map)}")
 

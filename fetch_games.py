@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+"""
+Fetch a season of FBS results from CollegeFootballData.com into ranker CSV.
+
+The output is exactly what fbs_ranker.py reads:
+
+    date,home_team,home_score,away_team,away_score
+
+Only completed FBS-vs-FBS games are written.  Games involving an FCS or
+non-Division-I opponent are dropped, because an opponent that only a single FBS
+team played adds an edge to the game graph without adding any comparison —
+see the "FBS-only games recommended" note in README.md.
+
+An API key is required (free, from https://collegefootballdata.com/key).  Pass
+it with --api-key or, better, put it in the CFBD_API_KEY environment variable
+so it stays out of your shell history:
+
+    export CFBD_API_KEY=...
+    python fetch_games.py --year 2025 --out games_2025.csv
+    python fbs_ranker.py games_2025.csv
+
+Rematches:
+    A conference championship game is often a rematch of a regular-season
+    meeting, and the ranker accepts only one result per pair.  This script
+    reports every repeated pair it finds and, by default, refuses to write a
+    file the ranker would reject.  --on-duplicate chooses a policy instead.
+
+This script only reads from the API; it never writes anything back.
+"""
+
+import argparse
+import csv
+import json
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+API_URL = "https://api.collegefootballdata.com/games"
+TIMEOUT = 60
+
+
+def fetch_games(year, season_type, api_key, url=API_URL, timeout=TIMEOUT):
+    """Return the raw list of game dicts for a season from the CFBD API."""
+    query = urllib.parse.urlencode({
+        "year": year,
+        "seasonType": season_type,
+        "division": "fbs",
+    })
+    request = urllib.request.Request(
+        f"{url}?{query}",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+            "User-Agent": "fbs-ranking/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            raise SystemExit(
+                f"API rejected the key ({exc.code}). Check CFBD_API_KEY, or get "
+                f"a free key at https://collegefootballdata.com/key"
+            ) from None
+        raise SystemExit(f"API request failed: HTTP {exc.code} {exc.reason}") from None
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"Could not reach {url}: {exc.reason}") from None
+
+
+def _first(record, *names):
+    """Return the first present, non-None key among *names*.
+
+    CFBD has served both camelCase and snake_case over the years, so accept
+    either rather than breaking on a field rename.
+    """
+    for name in names:
+        if record.get(name) is not None:
+            return record[name]
+    return None
+
+
+def extract_fbs_games(raw_games):
+    """Turn raw API records into ranker rows, keeping completed FBS-vs-FBS only.
+
+    Returns (rows, skipped) where skipped counts why records were dropped.
+    """
+    rows = []
+    skipped = {"not_final": 0, "not_fbs_matchup": 0, "missing_fields": 0}
+
+    for game in raw_games:
+        home = _first(game, "homeTeam", "home_team")
+        away = _first(game, "awayTeam", "away_team")
+        home_score = _first(game, "homePoints", "home_points")
+        away_score = _first(game, "awayPoints", "away_points")
+
+        if not home or not away:
+            skipped["missing_fields"] += 1
+            continue
+        if home_score is None or away_score is None:
+            # Not played yet, or cancelled.
+            skipped["not_final"] += 1
+            continue
+
+        home_div = _first(game, "homeClassification", "home_classification")
+        away_div = _first(game, "awayClassification", "away_classification")
+        # Only drop when the API actually tells us the opponent is not FBS;
+        # a missing classification is not evidence either way.
+        if (home_div and home_div != "fbs") or (away_div and away_div != "fbs"):
+            skipped["not_fbs_matchup"] += 1
+            continue
+
+        start = _first(game, "startDate", "start_date") or ""
+        rows.append({
+            "date": str(start)[:10],
+            "home_team": str(home).strip(),
+            "home_score": int(home_score),
+            "away_team": str(away).strip(),
+            "away_score": int(away_score),
+        })
+
+    return rows, skipped
+
+
+def find_duplicate_pairs(rows):
+    """Return {(team_a, team_b): [row, ...]} for pairs appearing more than once."""
+    seen = {}
+    for row in rows:
+        pair = tuple(sorted((row["home_team"], row["away_team"])))
+        seen.setdefault(pair, []).append(row)
+    return {pair: games for pair, games in seen.items() if len(games) > 1}
+
+
+def apply_duplicate_policy(rows, policy):
+    """Drop repeated meetings according to *policy* ("keep_first"/"keep_last")."""
+    if policy == "keep_last":
+        rows = list(reversed(rows))
+
+    kept, seen = [], set()
+    for row in rows:
+        pair = tuple(sorted((row["home_team"], row["away_team"])))
+        if pair in seen:
+            continue
+        seen.add(pair)
+        kept.append(row)
+
+    if policy == "keep_last":
+        kept.reverse()
+    return kept
+
+
+def write_csv(rows, path):
+    fields = ["date", "home_team", "home_score", "away_team", "away_score"]
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="fetch_games",
+        description="Fetch an FBS season from CollegeFootballData.com as ranker CSV.",
+    )
+    parser.add_argument("--year", type=int, required=True,
+                        help="Season year, e.g. 2025")
+    parser.add_argument("--out", "-o", required=True,
+                        help="CSV file to write")
+    parser.add_argument("--season-type", default="regular",
+                        choices=["regular", "postseason", "both"],
+                        help="Which games to fetch (default: regular)")
+    parser.add_argument("--api-key",
+                        help="CFBD API key (default: CFBD_API_KEY env var)")
+    parser.add_argument("--on-duplicate", default="error",
+                        choices=["error", "keep_first", "keep_last"],
+                        help="What to do when a pair of teams meets twice "
+                             "(default: error, matching the ranker)")
+    args = parser.parse_args(argv)
+
+    api_key = args.api_key or os.environ.get("CFBD_API_KEY")
+    if not api_key:
+        parser.error(
+            "no API key: set CFBD_API_KEY or pass --api-key. "
+            "Free keys: https://collegefootballdata.com/key"
+        )
+
+    season_types = ["regular", "postseason"] if args.season_type == "both" \
+        else [args.season_type]
+
+    raw = []
+    for season_type in season_types:
+        print(f"Fetching {args.year} {season_type} games …")
+        raw.extend(fetch_games(args.year, season_type, api_key))
+
+    rows, skipped = extract_fbs_games(raw)
+    print(f"  {len(raw)} records returned")
+    print(f"  {len(rows)} completed FBS-vs-FBS games kept")
+    print(f"  skipped: {skipped['not_final']} not final, "
+          f"{skipped['not_fbs_matchup']} not an FBS-vs-FBS matchup, "
+          f"{skipped['missing_fields']} missing fields")
+
+    duplicates = find_duplicate_pairs(rows)
+    if duplicates:
+        print(f"\n{len(duplicates)} pair(s) met more than once:")
+        for (team_a, team_b), games in sorted(duplicates.items()):
+            print(f"  {team_a} vs {team_b}")
+            for game in games:
+                print(f"    {game['date']}  {game['home_team']} "
+                      f"{game['home_score']}-{game['away_score']} "
+                      f"{game['away_team']}")
+
+        if args.on_duplicate == "error":
+            print(
+                "\nThe ranker accepts one game per pair, so it would reject this "
+                "file.\nRe-run with --on-duplicate keep_first or keep_last to "
+                "choose which\nmeeting counts, or edit the CSV yourself.",
+                file=sys.stderr,
+            )
+            return 1
+
+        before = len(rows)
+        rows = apply_duplicate_policy(rows, args.on_duplicate)
+        print(f"\nApplied --on-duplicate {args.on_duplicate}: "
+              f"dropped {before - len(rows)} game(s).")
+
+    write_csv(rows, args.out)
+    teams = {t for row in rows for t in (row["home_team"], row["away_team"])}
+    print(f"\nWrote {len(rows)} games ({len(teams)} teams) to {args.out}")
+    print(f"Next: python fbs_ranker.py {args.out} --output rankings_{args.year}.csv")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

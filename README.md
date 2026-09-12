@@ -123,6 +123,101 @@ would make the result depend on something that has nothing to do with football.
 
 ---
 
+## Getting real game data
+
+`fetch_games.py` pulls a season from [CollegeFootballData.com]
+(https://collegefootballdata.com) and writes a CSV in exactly the format
+`fbs_ranker.py` reads.
+
+It needs a free API key from https://collegefootballdata.com/key.  Keep it in
+an environment variable rather than on the command line, so it stays out of
+your shell history:
+
+```bash
+export CFBD_API_KEY=your-key-here
+
+python fetch_games.py --year 2025 --out games_2025.csv
+python fbs_ranker.py games_2025.csv --output rankings_2025.csv
+```
+
+Options:
+
+| Flag | Meaning |
+|------|---------|
+| `--year` | Season year (required) |
+| `--out` | CSV file to write (required) |
+| `--season-type` | `regular` (default), `postseason`, or `both` |
+| `--on-duplicate` | `error` (default), `keep_first`, `keep_last` |
+| `--api-key` | Key, if you would rather not use `CFBD_API_KEY` |
+
+The fetcher keeps only **completed FBS-vs-FBS games**, and reports what it
+dropped:
+
+```
+Fetching 2025 regular games …
+  5 records returned
+  3 completed FBS-vs-FBS games kept
+  skipped: 1 not final, 1 not an FBS-vs-FBS matchup, 0 missing fields
+```
+
+Games against FCS opponents are dropped because an opponent only one FBS team
+played adds an edge to the game graph without adding any comparison.
+
+Before writing, it checks for rematches and lists them rather than quietly
+picking one:
+
+```
+1 pair(s) met more than once:
+  Oklahoma vs Texas
+    2025-10-11  Texas 31-24 Oklahoma
+    2025-12-06  Oklahoma 27-21 Texas
+
+The ranker accepts one game per pair, so it would reject this file.
+Re-run with --on-duplicate keep_first or keep_last to choose which
+meeting counts, or edit the CSV yourself.
+```
+
+No file is written in that case, so you never get a CSV the ranker will
+refuse.  The script only reads from the API; it never writes anything back.
+
+---
+
+## Rematches and duplicate games
+
+The ranker holds one result per pair of teams, so a second meeting between the
+same two teams has nowhere to go.  Silently keeping one of them would make the
+rankings depend on the order of rows in your CSV, so loading stops instead:
+
+```
+$ python fbs_ranker.py games_2025.csv
+Loading games from: games_2025.csv
+
+Error: games_2025.csv line 4: Oklahoma and Texas appear twice in this dataset
+(Oklahoma 24-31 Texas, then Oklahoma 27-21 Texas). Only one game per pair is
+supported, so the second result would silently replace the first. Remove one of
+them, or construct the ranker with on_duplicate='keep_first' or 'keep_last' to
+choose which meeting counts.
+```
+
+This matters for real data: a conference championship game is frequently a
+rematch of a regular-season meeting, so a full season very often contains at
+least one repeated pair.  Home and away swapped counts as the same pair.
+
+If you would rather choose a policy than edit the file:
+
+```python
+FBSRoundRobinRanker()                             # refuse duplicates (default)
+FBSRoundRobinRanker(on_duplicate="keep_first")    # the earlier meeting counts
+FBSRoundRobinRanker(on_duplicate="keep_last")     # the later meeting counts
+```
+
+Neither policy is a real answer to a split season series — both discard a
+result that actually happened.  Handling a series properly (a 1-1 record with
+points from both games) would require storing more than one result per pair,
+which the ranker does not currently do.
+
+---
+
 ## Ties
 
 Two teams are tied when nothing in the data separates them: no shared group
@@ -264,6 +359,8 @@ date,home_team,home_score,away_team,away_score
 from fbs_ranker import FBSRoundRobinRanker
 
 ranker = FBSRoundRobinRanker()
+# Two games between the same pair raise DuplicateGameError by default; pass
+# on_duplicate="keep_first" or "keep_last" to pick one instead.
 
 # Add games programmatically
 ranker.add_game("Alabama", "Georgia", 45, 17)
@@ -356,7 +453,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-65 tests cover:
+95 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -375,6 +472,12 @@ of this file shows the latest result.
   depending on the other group members' names
 - Genuine ties sharing a rank, ranks skipping after a tie, and renaming a
   team never changing its rank
+- Duplicate meetings refused (including home/away reversed), the rejected
+  duplicate leaving data untouched, the keep_first / keep_last policies, and
+  CSV errors naming the offending file and line
+- `fetch_games.py`: both of CFBD's field-naming styles, unplayed and non-FBS
+  games dropped, rematches found despite reversed sides, and the CSV it writes
+  loading into the ranker (the API layer runs against a stub, never the network)
 - Ranking is always a strict total order (no cycles survive)
 - Determinism across input orderings
 - CSV loading (with and without a `date` column)
@@ -385,10 +488,9 @@ of this file shows the latest result.
 
 ## Assumptions & limitations
 
-- **One game per pair per dataset.**  If a CSV contains duplicate matchups,
-  the second result silently overwrites the first.  For multi-season datasets
-  covering the same pair of teams, split by season and run separately, or
-  pre-process the CSV to keep only the desired game.
+- **One game per pair per dataset.**  The ranker stores a single result per
+  pair of teams.  A second meeting is refused rather than silently kept — see
+  "Rematches and duplicate games" below.
 - **No overtime distinction.**  A win is a win regardless of overtime.
 - **FBS-only games recommended.**  Including FCS or non-D1 opponents may
   create unexpected edges in the game graph.  Filter to FBS-vs-FBS games
