@@ -161,14 +161,24 @@ class TestCsvHandoff(unittest.TestCase):
         self.assertEqual([r["team"] for r in results],
                          ["Texas", "Oklahoma", "Baylor"])
 
-    def test_a_written_rematch_is_refused_by_the_ranker(self):
-        """The two scripts agree: an unresolved rematch stops the ranker."""
+    def test_a_written_rematch_becomes_a_season_series(self):
+        """Both meetings survive the hand-off and count as a 1-1 series."""
+        path = self._write_rows([
+            fbs_game("Texas", 31, "Oklahoma", 24, date="2025-10-11"),
+            fbs_game("Oklahoma", 27, "Texas", 21, date="2025-12-06"),
+        ])
+        ranker = FBSRoundRobinRanker()
+        ranker.load_csv(path)
+        self.assertEqual(len(ranker.get_results("Texas", "Oklahoma")), 2)
+        self.assertEqual(ranker._overall_record("Texas")[:2], (1, 1))
+
+    def test_a_written_rematch_is_refused_under_the_strict_policy(self):
         path = self._write_rows([
             fbs_game("Texas", 31, "Oklahoma", 24, date="2025-10-11"),
             fbs_game("Oklahoma", 27, "Texas", 21, date="2025-12-06"),
         ])
         with self.assertRaises(DuplicateGameError):
-            FBSRoundRobinRanker().load_csv(path)
+            FBSRoundRobinRanker(on_duplicate="error").load_csv(path)
 
 
 class TestApiLayer(unittest.TestCase):

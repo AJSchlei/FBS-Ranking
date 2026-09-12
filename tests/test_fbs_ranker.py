@@ -408,7 +408,8 @@ class TestResultFields(unittest.TestCase):
 
     def test_all_fields_present(self):
         required = {
-            "rank", "team", "group_size", "wins", "losses",
+            "rank", "team", "overall_wins", "overall_losses",
+            "overall_win_pct", "group_size", "wins", "losses",
             "win_pct", "points_for", "points_against", "point_diff",
         }
         for row in self.results:
@@ -789,34 +790,33 @@ class TestGenuineTiesShareARank(unittest.TestCase):
 
 
 class TestDuplicateDetection(unittest.TestCase):
-    """A second meeting between the same pair is refused, not silently kept.
+    """on_duplicate="error" refuses any dataset containing a rematch.
 
-    The ranker stores one result per pair, so an unnoticed duplicate would make
-    the rankings depend on row order.  Real seasons hit this: a conference
-    championship game is often a rematch of a regular-season meeting.
+    The default is "combine" (see TestSeasonSeries); this policy exists for
+    callers who would rather be told than have a season series counted.
     """
 
     def test_same_pair_twice_raises(self):
-        r = FBSRoundRobinRanker()
+        r = FBSRoundRobinRanker(on_duplicate="error")
         r.add_game("Alabama", "Georgia", 30, 10)
         with self.assertRaises(DuplicateGameError):
             r.add_game("Alabama", "Georgia", 21, 17)
 
     def test_reversed_order_is_still_the_same_pair(self):
         """Home and away swapped is a rematch, not a different fixture."""
-        r = FBSRoundRobinRanker()
+        r = FBSRoundRobinRanker(on_duplicate="error")
         r.add_game("Alabama", "Georgia", 30, 10)
         with self.assertRaises(DuplicateGameError):
             r.add_game("Georgia", "Alabama", 21, 17)
 
     def test_identical_row_repeated_also_raises(self):
-        r = FBSRoundRobinRanker()
+        r = FBSRoundRobinRanker(on_duplicate="error")
         r.add_game("Alabama", "Georgia", 30, 10)
         with self.assertRaises(DuplicateGameError):
             r.add_game("Alabama", "Georgia", 30, 10)
 
     def test_message_names_both_teams_and_both_results(self):
-        r = FBSRoundRobinRanker()
+        r = FBSRoundRobinRanker(on_duplicate="error")
         r.add_game("Alabama", "Georgia", 30, 10)
         with self.assertRaises(DuplicateGameError) as ctx:
             r.add_game("Georgia", "Alabama", 21, 17)
@@ -825,7 +825,7 @@ class TestDuplicateDetection(unittest.TestCase):
             self.assertIn(fragment, message)
 
     def test_rejected_duplicate_leaves_the_data_untouched(self):
-        r = FBSRoundRobinRanker()
+        r = FBSRoundRobinRanker(on_duplicate="error")
         r.add_game("Alabama", "Georgia", 30, 10)
         with self.assertRaises(DuplicateGameError):
             r.add_game("Georgia", "Alabama", 21, 17)
@@ -875,7 +875,7 @@ class TestCsvDuplicateReporting(unittest.TestCase):
             ["2025-11-01", "Ohio State", 28, "Michigan", 20],
             ["2025-12-06", "Oklahoma", 27, "Texas", 21],   # rematch, line 4
         ])
-        r = FBSRoundRobinRanker()
+        r = FBSRoundRobinRanker(on_duplicate="error")
         with self.assertRaises(DuplicateGameError) as ctx:
             r.load_csv(path)
         message = str(ctx.exception)
@@ -902,6 +902,110 @@ class TestCsvDuplicateReporting(unittest.TestCase):
         r = FBSRoundRobinRanker(on_duplicate="keep_last")
         r.load_csv(path)
         self.assertEqual(r.get_result("Oklahoma", "Texas"), (27, 21))
+
+
+class TestSeasonSeries(unittest.TestCase):
+    """The default policy counts every meeting, so a split series is 1-1.
+
+    Alabama and Georgia met twice in 2025 and split.  Picking either game
+    alone declares a winner the season did not; counting both leaves them
+    even head to head and lets the rest of the evidence decide.
+    """
+
+    SPLIT = [("Georgia", "Alabama", 21, 24),     # Alabama won the first
+             ("Alabama", "Georgia", 7, 28)]      # Georgia won the rematch
+
+    def test_combine_is_the_default(self):
+        self.assertEqual(FBSRoundRobinRanker().on_duplicate, "combine")
+
+    def test_both_meetings_are_kept(self):
+        r = make_ranker(*self.SPLIT)
+        self.assertEqual(len(r.get_results("Alabama", "Georgia")), 2)
+        self.assertEqual(r.total_games(), 2)
+        self.assertEqual(len(r._game_map), 1, "still one pair")
+
+    def test_results_are_oriented_to_the_team_asked_about(self):
+        r = make_ranker(*self.SPLIT)
+        bama = r.get_results("Alabama", "Georgia")
+        dawgs = r.get_results("Georgia", "Alabama")
+        self.assertEqual(bama, [(24, 21), (7, 28)])
+        self.assertEqual(dawgs, [(21, 24), (28, 7)])
+
+    def test_a_split_series_is_one_win_and_one_loss(self):
+        r = make_ranker(*self.SPLIT)
+        self.assertEqual(r._overall_record("Alabama")[:2], (1, 1))
+        self.assertEqual(r._overall_record("Georgia")[:2], (1, 1))
+
+    def test_points_come_from_both_games(self):
+        r = make_ranker(*self.SPLIT)
+        _, _, pf, pa = r._overall_record("Alabama")
+        self.assertEqual((pf, pa), (24 + 7, 21 + 28))
+
+    def test_a_sweep_is_two_wins(self):
+        r = make_ranker(("Texas Tech", "BYU", 29, 7),
+                        ("Texas Tech", "BYU", 34, 7))
+        self.assertEqual(r._overall_record("Texas Tech")[:2], (2, 0))
+        self.assertEqual(r._overall_record("BYU")[:2], (0, 2))
+
+    def test_in_group_record_counts_both_meetings(self):
+        """A 3-team group where two of them played twice gives one team 3 games."""
+        r = make_ranker(("A", "B", 30, 10), ("B", "A", 30, 10),   # split
+                        ("A", "C", 30, 10), ("B", "C", 30, 10))
+        group = ["A", "B", "C"]
+        self.assertEqual(r._record_in_group("A", group)[:2], (2, 1))
+        self.assertEqual(r._record_in_group("B", group)[:2], (2, 1))
+
+    def test_a_split_leaves_the_pair_even_rather_than_picking_a_winner(self):
+        """keep_first and keep_last disagree here; combine refuses to guess."""
+        first = FBSRoundRobinRanker(on_duplicate="keep_first")
+        last = FBSRoundRobinRanker(on_duplicate="keep_last")
+        for ranker in (first, last):
+            for home, away, hs, as_ in self.SPLIT:
+                ranker.add_game(home, away, hs, as_)
+        self.assertEqual(first._overall_record("Alabama")[:2], (1, 0))
+        self.assertEqual(last._overall_record("Alabama")[:2], (0, 1))
+        # combine gives neither team the series
+        combined = make_ranker(*self.SPLIT)
+        self.assertEqual(combined._overall_record("Alabama")[:2],
+                         combined._overall_record("Georgia")[:2])
+
+    def test_get_result_returns_the_first_meeting(self):
+        r = make_ranker(*self.SPLIT)
+        self.assertEqual(r.get_result("Alabama", "Georgia"), (24, 21))
+
+    def test_get_results_is_empty_for_teams_that_never_played(self):
+        r = make_ranker(("A", "B", 30, 10), ("C", "D", 30, 10))
+        self.assertEqual(r.get_results("A", "C"), [])
+        self.assertIsNone(r.get_result("A", "C"))
+
+
+class TestOverallRecordInOutput(unittest.TestCase):
+    """rank() reports the full-season record next to the in-group one."""
+
+    def setUp(self):
+        # A, B, C form a 3-team group.  D plays only A, so D is outside it —
+        # A's season therefore covers one more game than its group does.
+        self.results = make_ranker(
+            ("A", "B", 30, 10), ("A", "C", 30, 10), ("B", "C", 30, 10),
+            ("A", "D", 30, 10),
+        ).rank()
+        self.by_team = {r["team"]: r for r in self.results}
+
+    def test_overall_record_covers_every_game(self):
+        """A went 3-0 overall but only 2-0 inside its 3-team group."""
+        a = self.by_team["A"]
+        self.assertEqual((a["overall_wins"], a["overall_losses"]), (3, 0))
+        self.assertEqual((a["wins"], a["losses"]), (2, 0))
+
+    def test_overall_win_pct_matches_the_overall_record(self):
+        for row in self.results:
+            games = row["overall_wins"] + row["overall_losses"]
+            expected = round(row["overall_wins"] / games, 3) if games else 0.0
+            self.assertAlmostEqual(row["overall_win_pct"], expected)
+
+    def test_every_row_has_played_at_least_one_game(self):
+        for row in self.results:
+            self.assertGreater(row["overall_wins"] + row["overall_losses"], 0)
 
 
 if __name__ == "__main__":

@@ -74,7 +74,8 @@ class FBSRoundRobinRanker:
     Attributes:
         teams (set): All team names seen in the loaded game data.
         on_duplicate (str): What to do when the same pair of teams appears
-            twice — "error" (default), "keep_first", or "keep_last".
+            more than once — "combine" (default), "error", "keep_first", or
+            "keep_last".
 
     Class attributes:
         PRIOR_GAMES: Phantom .500 games added to each team's overall record
@@ -87,12 +88,13 @@ class FBSRoundRobinRanker:
     # it produces is stable for anything from roughly 2 to 10.
     PRIOR_GAMES = 4.0
 
-    #: What to do when a dataset contains two games between the same pair.
-    #: "error" (default) refuses the dataset, "keep_first" ignores the later
-    #: game, "keep_last" lets it overwrite the earlier one.
-    DUPLICATE_POLICIES = ("error", "keep_first", "keep_last")
+    #: What to do when a pair of teams meets more than once.
+    #: "combine" (default) counts every meeting, so a split season series is a
+    #: 1-1 record with points from both games; "error" refuses the dataset;
+    #: "keep_first" ignores later meetings; "keep_last" keeps only the latest.
+    DUPLICATE_POLICIES = ("combine", "error", "keep_first", "keep_last")
 
-    def __init__(self, on_duplicate: str = "error"):
+    def __init__(self, on_duplicate: str = "combine"):
         if on_duplicate not in self.DUPLICATE_POLICIES:
             raise ValueError(
                 f"on_duplicate must be one of {self.DUPLICATE_POLICIES}, "
@@ -101,9 +103,9 @@ class FBSRoundRobinRanker:
         self.on_duplicate = on_duplicate
         self.teams: set = set()
         # Canonical key: (team_a, team_b) with team_a < team_b (lexicographic).
-        # Value: (score_for_team_a, score_for_team_b)
-        # One game per pair is supported per season.  If a duplicate pair is
-        # loaded the second result silently overwrites the first.
+        # Value: list of (score_for_team_a, score_for_team_b), in the order the
+        # games were added.  A pair that met twice — a conference championship
+        # rematch, say — keeps both meetings, so a split series counts as 1-1.
         self._game_map: dict = {}
 
     # ------------------------------------------------------------------
@@ -149,35 +151,51 @@ class FBSRoundRobinRanker:
             if self.on_duplicate == "keep_first":
                 return
             if self.on_duplicate == "error":
-                prev_a, prev_b = self._game_map[key]
+                prev_a, prev_b = self._game_map[key][0]
                 raise DuplicateGameError(
                     f"{key[0]} and {key[1]} appear twice in this dataset "
                     f"({key[0]} {prev_a}-{prev_b} {key[1]}, then "
                     f"{key[0]} {value[0]}-{value[1]} {key[1]}). "
-                    f"Only one game per pair is supported, so the second "
-                    f"result would silently replace the first. Remove one of "
-                    f"them, or construct the ranker with "
-                    f"on_duplicate='keep_first' or 'keep_last' to choose "
-                    f"which meeting counts."
+                    f"This ranker was constructed with on_duplicate='error', "
+                    f"so it refuses datasets containing a rematch. Use the "
+                    f"default 'combine' to count both meetings as a season "
+                    f"series, or 'keep_first' / 'keep_last' to pick one."
                 )
-            # "keep_last" falls through and overwrites.
+            if self.on_duplicate == "keep_last":
+                self._game_map[key] = [value]
+                return
+            # "combine" falls through and appends the extra meeting.
 
         self.teams.add(team_a)
         self.teams.add(team_b)
-        self._game_map[key] = value
+        self._game_map.setdefault(key, []).append(value)
 
     # ------------------------------------------------------------------
     # Game result helpers
     # ------------------------------------------------------------------
 
-    def get_result(self, team_a: str, team_b: str):
-        """Return (score_a, score_b) for the game between the two teams, or None."""
+    def get_results(self, team_a: str, team_b: str) -> list:
+        """Every meeting between two teams, as (score_a, score_b) from team_a's
+        point of view, in the order the games were added.
+
+        Returns an empty list if the two never played.
+        """
         if team_a < team_b:
-            return self._game_map.get((team_a, team_b))
-        result = self._game_map.get((team_b, team_a))
-        if result is None:
-            return None
-        return (result[1], result[0])
+            return list(self._game_map.get((team_a, team_b), ()))
+        return [(b, a) for a, b in self._game_map.get((team_b, team_a), ())]
+
+    def get_result(self, team_a: str, team_b: str):
+        """The FIRST meeting between two teams, or None if they never played.
+
+        A convenience for the common case of a single meeting.  Use
+        get_results when a pair may have met more than once.
+        """
+        results = self.get_results(team_a, team_b)
+        return results[0] if results else None
+
+    def total_games(self) -> int:
+        """Number of games loaded, counting every meeting of a repeated pair."""
+        return sum(len(meetings) for meetings in self._game_map.values())
 
     def _record_in_group(self, team: str, group) -> tuple:
         """Return (wins, losses, points_for, points_against) for *team* vs every
@@ -186,16 +204,15 @@ class FBSRoundRobinRanker:
         for opp in group:
             if opp == team:
                 continue
-            result = self.get_result(team, opp)
-            if result is None:
-                continue
-            st, so = result
-            pf += st
-            pa += so
-            if st > so:
-                wins += 1
-            else:
-                losses += 1
+            # Every meeting counts: a split series against a group opponent is
+            # one win and one loss, with points from both games.
+            for st, so in self.get_results(team, opp):
+                pf += st
+                pa += so
+                if st > so:
+                    wins += 1
+                else:
+                    losses += 1
         return wins, losses, pf, pa
 
     # ------------------------------------------------------------------
@@ -237,14 +254,13 @@ class FBSRoundRobinRanker:
     def _overall_record(self, team: str) -> tuple:
         """Return (wins, losses, points_for, points_against) across all games."""
         w = l = pf = pa = 0
-        for (ta, tb), (sa, sb) in self._game_map.items():
-            if ta == team:
-                pf += sa; pa += sb
-                if sa > sb: w += 1
-                else: l += 1
-            elif tb == team:
-                pf += sb; pa += sa
-                if sb > sa: w += 1
+        for (ta, tb), meetings in self._game_map.items():
+            if team not in (ta, tb):
+                continue
+            for sa, sb in meetings:
+                st, so = (sa, sb) if ta == team else (sb, sa)
+                pf += st; pa += so
+                if st > so: w += 1
                 else: l += 1
         return w, l, pf, pa
 
@@ -380,10 +396,13 @@ class FBSRoundRobinRanker:
                                 nothing separates share a rank, and the next
                                 rank skips accordingly (1, 2, 2, 4, ...).
                 team          - team name string
+                overall_wins  - wins across every game played
+                overall_losses- losses across every game played
+                overall_win_pct - overall wins / games, rounded to 3 dp
                 group_size    - size of the team's largest (primary) clique
-                wins          - wins inside that primary clique
-                losses        - losses inside that primary clique
-                win_pct       - wins / (wins + losses), rounded to 3 dp
+                wins          - wins inside that primary clique only
+                losses        - losses inside that primary clique only
+                win_pct       - in-clique wins / games, rounded to 3 dp
                 points_for    - cumulative PF vs. primary-clique opponents
                 points_against- cumulative PA vs. primary-clique opponents
                 point_diff    - points_for − points_against
@@ -490,9 +509,13 @@ class FBSRoundRobinRanker:
         for team in sorted_teams:
             primary = team_primary[team]
             w, l, pf, pa = self._record_in_group(team, primary)
+            ow, ol, _, _ = self._overall_record(team)
             results.append({
                 "rank": team_rank[team],
                 "team": team,
+                "overall_wins": ow,
+                "overall_losses": ol,
+                "overall_win_pct": round(self._win_pct(ow, ol), 3),
                 "group_size": len(primary),
                 "wins": w,
                 "losses": l,
@@ -645,12 +668,15 @@ def generate_demo_games() -> list:
 def print_rankings(results: list) -> None:
     """Print rankings as a formatted table to stdout."""
     print()
-    print("=" * 90)
+    print("=" * 96)
     print("  FBS ROUND-ROBIN RANKINGS")
-    print("=" * 90)
-    hdr = f"  {'Rank':<5} {'Team':<22} {'Grp':<5} {'W-L':<8} {'Win%':<7} {'PF':<6} {'PA':<6} {'Diff'}"
+    print("  Overall = full season record.  In-Grp / Grp% / PF / PA / Diff "
+          "cover games inside the team's group only.")
+    print("=" * 96)
+    hdr = (f"  {'Rank':<5} {'Team':<22} {'Overall':<8} {'Grp':<4} "
+           f"{'In-Grp':<7} {'Grp%':<7} {'PF':<6} {'PA':<6} {'Diff'}")
     print(hdr)
-    sep = "-" * 90
+    sep = "-" * 96
 
     # A rank held by more than one team is shown as "T3", the way standings
     # mark a tie.  The equal rank number is the tie; listing order is not.
@@ -662,25 +688,27 @@ def print_rankings(results: list) -> None:
         if prev_size is not None and r["group_size"] != prev_size:
             print()   # blank line between tiers
         print(sep)
+        overall = f"{r['overall_wins']}-{r['overall_losses']}"
         wl = f"{r['wins']}-{r['losses']}"
         diff = f"{r['point_diff']:+d}"
         label = f"T{r['rank']}" if r["rank"] in shared_ranks else str(r["rank"])
         print(
-            f"  {label:<5} {r['team']:<22} {r['group_size']:<5} "
-            f"{wl:<8} {r['win_pct']:<7.3f} {r['points_for']:<6} "
+            f"  {label:<5} {r['team']:<22} {overall:<8} {r['group_size']:<4} "
+            f"{wl:<7} {r['win_pct']:<7.3f} {r['points_for']:<6} "
             f"{r['points_against']:<6} {diff}"
         )
         prev_size = r["group_size"]
 
-    print("=" * 90)
+    print("=" * 96)
     print()
 
 
 def save_csv(results: list, filepath: str) -> None:
     """Save rankings to a CSV file."""
     fieldnames = [
-        "rank", "team", "group_size", "wins", "losses",
-        "win_pct", "points_for", "points_against", "point_diff",
+        "rank", "team", "overall_wins", "overall_losses", "overall_win_pct",
+        "group_size", "wins", "losses", "win_pct",
+        "points_for", "points_against", "point_diff",
     ]
     with open(filepath, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
@@ -752,7 +780,10 @@ CSV input format:
             print(f"\nError: {exc}", file=sys.stderr)
             sys.exit(1)
 
-    print(f"Teams: {len(ranker.teams)}  |  Games: {len(ranker._game_map)}")
+    pairs = len(ranker._game_map)
+    games = ranker.total_games()
+    extra = f"  |  Repeat meetings: {games - pairs}" if games != pairs else ""
+    print(f"Teams: {len(ranker.teams)}  |  Games: {games}{extra}")
 
     results = ranker.rank()
     print_rankings(results)

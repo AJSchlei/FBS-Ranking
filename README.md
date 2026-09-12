@@ -182,39 +182,40 @@ refuse.  The script only reads from the API; it never writes anything back.
 
 ---
 
-## Rematches and duplicate games
+## Rematches and season series
 
-The ranker holds one result per pair of teams, so a second meeting between the
-same two teams has nowhere to go.  Silently keeping one of them would make the
-rankings depend on the order of rows in your CSV, so loading stops instead:
+Two teams can meet more than once — a conference championship game is often a
+rematch, and some pairs are scheduled home-and-home.  **Every meeting counts.**
+A pair that splits its series is 1-1 against each other, with points from both
+games; a sweep is 2-0.
 
-```
-$ python fbs_ranker.py games_2025.csv
-Loading games from: games_2025.csv
+This matters because picking one game declares a winner the season did not.  In
+the 2025 FBS regular season, seven pairs met twice and **five of them split**:
 
-Error: games_2025.csv line 4: Oklahoma and Texas appear twice in this dataset
-(Oklahoma 24-31 Texas, then Oklahoma 27-21 Texas). Only one game per pair is
-supported, so the second result would silently replace the first. Remove one of
-them, or construct the ranker with on_duplicate='keep_first' or 'keep_last' to
-choose which meeting counts.
-```
+| Pair | First | Second |
+|------|-------|--------|
+| Alabama / Georgia | Alabama 24-21 | Georgia 28-7 |
+| Duke / Virginia | Virginia 34-17 | Duke 27-20 |
+| Jacksonville St / Kennesaw St | Jax St 35-26 | Kennesaw 19-15 |
+| Miami (OH) / W. Michigan | Miami 26-17 | W. Michigan 23-13 |
+| Oregon St / Washington St | Oregon St 10-7 | Washington St 32-8 |
 
-This matters for real data: a conference championship game is frequently a
-rematch of a regular-season meeting, so a full season very often contains at
-least one repeated pair.  Home and away swapped counts as the same pair.
+For those five, keeping only the first game and keeping only the last name
+different winners.  Counting both leaves the pair even and lets the rest of the
+evidence place them — Georgia finishes 4th, between the 5th it gets from the
+first game alone and the 2nd it gets from the second.
 
-If you would rather choose a policy than edit the file:
+Other policies are available when you want them:
 
 ```python
-FBSRoundRobinRanker()                             # refuse duplicates (default)
-FBSRoundRobinRanker(on_duplicate="keep_first")    # the earlier meeting counts
-FBSRoundRobinRanker(on_duplicate="keep_last")     # the later meeting counts
+FBSRoundRobinRanker()                             # count every meeting (default)
+FBSRoundRobinRanker(on_duplicate="error")         # refuse a dataset with a rematch
+FBSRoundRobinRanker(on_duplicate="keep_first")    # only the earliest meeting
+FBSRoundRobinRanker(on_duplicate="keep_last")     # only the latest meeting
 ```
 
-Neither policy is a real answer to a split season series — both discard a
-result that actually happened.  Handling a series properly (a 1-1 record with
-points from both games) would require storing more than one result per pair,
-which the ranker does not currently do.
+`get_results(a, b)` returns every meeting between two teams, oriented to the
+first team named; `get_result(a, b)` returns just the first.
 
 ---
 
@@ -384,10 +385,13 @@ for row in results:
 |-------|------|-------------|
 | `rank` | int | Position (1 = best).  Tied teams share a rank and the next rank skips: 1, 2, 2, 4 |
 | `team` | str | Team name |
+| `overall_wins` | int | Wins across every game played |
+| `overall_losses` | int | Losses across every game played |
+| `overall_win_pct` | float | Overall wins / games, rounded to 3 dp |
 | `group_size` | int | Number of teams in the round-robin group used for ranking |
-| `wins` | int | Wins against group opponents |
-| `losses` | int | Losses against group opponents |
-| `win_pct` | float | wins / (wins + losses), rounded to 3 dp |
+| `wins` | int | Wins against group opponents **only** |
+| `losses` | int | Losses against group opponents **only** |
+| `win_pct` | float | In-group wins / games, rounded to 3 dp |
 | `points_for` | int | Cumulative points scored vs. group opponents |
 | `points_against` | int | Cumulative points allowed vs. group opponents |
 | `point_diff` | int | points_for − points_against |
@@ -401,21 +405,17 @@ Power Conference, a 6-team Mid-Major, a 4-team Small Conference, a 3-team Trio,
 and three Independents connected only by single cross-over games.
 
 ```
-  Rank  Team                   Grp   W-L      Win%    Diff
-  1     Aces                   8     7-0      1.000   +197
-  2     Rams                   6     5-0      1.000   +98
-  3     Bears                  8     6-1      0.857   +67
-  4     Lions                  4     3-0      1.000   +21
-  5     Spartans               6     4-1      0.800   +38
-  6     Mustangs               3     2-0      1.000   +21
-  7     Colts                  8     5-2      0.714   +42
-  8     Panthers               4     2-1      0.667   +0
-  9     Tigers                 6     3-2      0.600   +18
-  10    Dukes                  8     4-3      0.571   +0
+  Rank  Team                   Overall  Grp  In-Grp  Grp%    PF     PA     Diff
+  1     Aces                   8-0      8    7-0     1.000   303    106    +197
+  2     Rams                   5-0      6    5-0     1.000   174    76     +98
+  3     Bears                  7-1      8    6-1     0.857   222    155    +67
+  4     Lions                  4-0      4    3-0     1.000   66     45     +21
   ...
-  23    Zephyrs                6     0-5      0.000   -90
-  24    Hawks                  8     0-7      0.000   -93
 ```
+
+`Overall` is the team's full-season record.  Everything after `Grp` covers only
+games played inside that team's round-robin group — with real data a group
+covers a fraction of a season, so the two differ for nearly every team.
 
 Note that group size does **not** dictate the tiers: the unbeaten Rams (6-team
 group) and Lions (4-team group) outrank teams from the 8-team group, while
@@ -453,7 +453,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-95 tests cover:
+109 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -475,6 +475,10 @@ of this file shows the latest result.
 - Duplicate meetings refused (including home/away reversed), the rejected
   duplicate leaving data untouched, the keep_first / keep_last policies, and
   CSV errors naming the offending file and line
+- Season series: both meetings kept, a split counted as 1-1 with points from
+  both games, a sweep as 2-0, and combine landing between keep_first and
+  keep_last rather than picking a winner
+- The overall record reported alongside the in-group one
 - `fetch_games.py`: both of CFBD's field-naming styles, unplayed and non-FBS
   games dropped, rematches found despite reversed sides, and the CSV it writes
   loading into the ranker (the API layer runs against a stub, never the network)
@@ -488,9 +492,13 @@ of this file shows the latest result.
 
 ## Assumptions & limitations
 
-- **One game per pair per dataset.**  The ranker stores a single result per
-  pair of teams.  A second meeting is refused rather than silently kept — see
-  "Rematches and duplicate games" below.
+- **Round-robin groups are small in practice.**  Modern conferences are far
+  larger than the number of conference games each team plays, so complete
+  round-robins barely exist.  In the 2025 FBS regular season the largest group
+  was 7 teams (the Sun Belt), and 92% of team pairs shared no group at all and
+  were compared on record.  The group evidence still does heavy lifting —
+  those verdicts lock in first and override about 1,500 record-based ones —
+  but the tool leans on the fallback far more than the name suggests.
 - **No overtime distinction.**  A win is a win regardless of overtime.
 - **FBS-only games recommended.**  Including FCS or non-D1 opponents may
   create unexpected edges in the game graph.  Filter to FBS-vs-FBS games
