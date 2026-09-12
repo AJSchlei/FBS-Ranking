@@ -21,9 +21,10 @@ so it stays out of your shell history:
 
 Rematches:
     A conference championship game is often a rematch of a regular-season
-    meeting, and the ranker accepts only one result per pair.  This script
-    reports every repeated pair it finds and, by default, refuses to write a
-    file the ranker would reject.  --on-duplicate chooses a policy instead.
+    meeting.  Both meetings are written by default, because the ranker counts
+    every meeting: a split series is 1-1 with points from both games.  The
+    repeated pairs are listed so you can see them.  --on-duplicate can drop
+    one of the meetings, or refuse the season outright, if you want that.
 
 This script only reads from the API; it never writes anything back.
 """
@@ -134,7 +135,13 @@ def find_duplicate_pairs(rows):
 
 
 def apply_duplicate_policy(rows, policy):
-    """Drop repeated meetings according to *policy* ("keep_first"/"keep_last")."""
+    """Drop repeated meetings according to *policy*.
+
+    "combine" keeps every meeting and is a no-op; "keep_first" and
+    "keep_last" reduce each repeated pair to a single game.
+    """
+    if policy == "combine":
+        return list(rows)
     if policy == "keep_last":
         rows = list(reversed(rows))
 
@@ -173,10 +180,12 @@ def main(argv=None):
                         help="Which games to fetch (default: regular)")
     parser.add_argument("--api-key",
                         help="CFBD API key (default: CFBD_API_KEY env var)")
-    parser.add_argument("--on-duplicate", default="error",
-                        choices=["error", "keep_first", "keep_last"],
-                        help="What to do when a pair of teams meets twice "
-                             "(default: error, matching the ranker)")
+    parser.add_argument("--on-duplicate", default="combine",
+                        choices=["combine", "error", "keep_first", "keep_last"],
+                        help="What to do when a pair of teams meets twice: "
+                             "combine keeps both meetings (default, matching "
+                             "the ranker), error refuses the season, "
+                             "keep_first / keep_last drop one")
     args = parser.parse_args(argv)
 
     api_key = args.api_key or os.environ.get("CFBD_API_KEY")
@@ -213,17 +222,21 @@ def main(argv=None):
 
         if args.on_duplicate == "error":
             print(
-                "\nThe ranker accepts one game per pair, so it would reject this "
-                "file.\nRe-run with --on-duplicate keep_first or keep_last to "
-                "choose which\nmeeting counts, or edit the CSV yourself.",
+                "\n--on-duplicate error was requested, so nothing was written."
+                "\nDrop the flag to keep both meetings as a season series, or "
+                "use\nkeep_first / keep_last to count only one of them.",
                 file=sys.stderr,
             )
             return 1
 
-        before = len(rows)
-        rows = apply_duplicate_policy(rows, args.on_duplicate)
-        print(f"\nApplied --on-duplicate {args.on_duplicate}: "
-              f"dropped {before - len(rows)} game(s).")
+        if args.on_duplicate == "combine":
+            print("\nBoth meetings are kept: the ranker counts a split series "
+                  "as 1-1\nwith points from both games.")
+        else:
+            before = len(rows)
+            rows = apply_duplicate_policy(rows, args.on_duplicate)
+            print(f"\nApplied --on-duplicate {args.on_duplicate}: "
+                  f"dropped {before - len(rows)} game(s).")
 
     write_csv(rows, args.out)
     teams = {t for row in rows for t in (row["home_team"], row["away_team"])}

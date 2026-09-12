@@ -147,7 +147,7 @@ Options:
 | `--year` | Season year (required) |
 | `--out` | CSV file to write (required) |
 | `--season-type` | `regular` (default), `postseason`, or `both` |
-| `--on-duplicate` | `error` (default), `keep_first`, `keep_last` |
+| `--on-duplicate` | `combine` (default), `error`, `keep_first`, `keep_last` |
 | `--api-key` | Key, if you would rather not use `CFBD_API_KEY` |
 
 The fetcher keeps only **completed FBS-vs-FBS games**, and reports what it
@@ -163,22 +163,23 @@ Fetching 2025 regular games …
 Games against FCS opponents are dropped because an opponent only one FBS team
 played adds an edge to the game graph without adding any comparison.
 
-Before writing, it checks for rematches and lists them rather than quietly
-picking one:
+Pairs that met more than once are listed, and **both meetings are written**,
+because the ranker counts every meeting:
 
 ```
-1 pair(s) met more than once:
-  Oklahoma vs Texas
-    2025-10-11  Texas 31-24 Oklahoma
-    2025-12-06  Oklahoma 27-21 Texas
+7 pair(s) met more than once:
+  Alabama vs Georgia
+    2025-09-27  Georgia 21-24 Alabama
+    2025-12-06  Alabama 7-28 Georgia
+  ...
 
-The ranker accepts one game per pair, so it would reject this file.
-Re-run with --on-duplicate keep_first or keep_last to choose which
-meeting counts, or edit the CSV yourself.
+Both meetings are kept: the ranker counts a split series as 1-1
+with points from both games.
 ```
 
-No file is written in that case, so you never get a CSV the ranker will
-refuse.  The script only reads from the API; it never writes anything back.
+Use `--on-duplicate keep_first` or `keep_last` to write only one meeting, or
+`error` to refuse a season containing any rematch.  The script only reads from
+the API; it never writes anything back.
 
 ---
 

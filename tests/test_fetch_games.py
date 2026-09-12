@@ -219,13 +219,40 @@ class TestApiLayer(unittest.TestCase):
                 fetch_games.fetch_games(2025, "regular", "BAD")
         self.assertIn("401", str(ctx.exception))
 
-    def test_main_refuses_to_write_a_file_the_ranker_would_reject(self):
+    def test_default_writes_both_meetings_of_a_rematch(self):
+        """The fetcher's default must match the ranker's: keep every meeting.
+
+        Regression: the fetcher defaulted to "error" after the ranker moved to
+        "combine", so the documented no-flag run refused to write anything and
+        steered the user toward dropping a game.
+        """
         raw = [fbs_game("Texas", 31, "Oklahoma", 24, date="2025-10-11"),
                fbs_game("Oklahoma", 27, "Texas", 21, date="2025-12-06")]
         out = os.path.join(tempfile.mkdtemp(), "games.csv")
         with mock.patch.object(fetch_games, "fetch_games", return_value=raw):
             code = fetch_games.main(["--year", "2025", "--out", out,
                                      "--api-key", "x"])
+        self.assertEqual(code, 0)
+        ranker = FBSRoundRobinRanker()
+        ranker.load_csv(out)
+        self.assertEqual(len(ranker.get_results("Texas", "Oklahoma")), 2)
+        self.assertEqual(ranker._overall_record("Texas")[:2], (1, 1))
+
+    def test_combine_policy_is_a_no_op_on_the_rows(self):
+        rows, _ = fetch_games.extract_fbs_games([
+            fbs_game("Texas", 31, "Oklahoma", 24, date="2025-10-11"),
+            fbs_game("Oklahoma", 27, "Texas", 21, date="2025-12-06"),
+        ])
+        self.assertEqual(fetch_games.apply_duplicate_policy(rows, "combine"), rows)
+
+    def test_error_policy_still_refuses_to_write(self):
+        raw = [fbs_game("Texas", 31, "Oklahoma", 24, date="2025-10-11"),
+               fbs_game("Oklahoma", 27, "Texas", 21, date="2025-12-06")]
+        out = os.path.join(tempfile.mkdtemp(), "games.csv")
+        with mock.patch.object(fetch_games, "fetch_games", return_value=raw):
+            code = fetch_games.main(["--year", "2025", "--out", out,
+                                     "--api-key", "x",
+                                     "--on-duplicate", "error"])
         self.assertEqual(code, 1)
         self.assertFalse(os.path.exists(out), "no file should be written")
 
