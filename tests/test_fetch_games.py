@@ -46,7 +46,8 @@ class TestExtractFbsGames(unittest.TestCase):
         rows, _ = fetch_games.extract_fbs_games([fbs_game("Texas", 31, "Oklahoma", 24)])
         self.assertEqual(rows, [{"date": "2025-09-06", "home_team": "Texas",
                                  "home_score": 31, "away_team": "Oklahoma",
-                                 "away_score": 24}])
+                                 "away_score": 24, "home_ranked": "true",
+                                 "away_ranked": "true"}])
 
     def test_understands_snake_case_fields(self):
         camel, _ = fetch_games.extract_fbs_games([fbs_game("Texas", 31, "Oklahoma", 24)])
@@ -64,14 +65,24 @@ class TestExtractFbsGames(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(skipped["not_final"], 1)
 
-    def test_drops_fcs_opponents(self):
+    def test_marks_an_fcs_opponent_unranked_rather_than_dropping_it(self):
         raw = [fbs_game("Texas", 31, "Oklahoma", 24),
                {"homeTeam": "Alabama", "homePoints": 55,
                 "awayTeam": "Mercer", "awayPoints": 3,
                 "homeClassification": "fbs", "awayClassification": "fcs"}]
+        rows, _ = fetch_games.extract_fbs_games(raw)
+        self.assertEqual(len(rows), 2, "the FCS game must be kept")
+        mercer = next(r for r in rows if r["away_team"] == "Mercer")
+        self.assertEqual(mercer["home_ranked"], "true")
+        self.assertEqual(mercer["away_ranked"], "false")
+
+    def test_drops_games_with_no_fbs_side(self):
+        raw = [{"homeTeam": "Mercer", "homePoints": 20,
+                "awayTeam": "Furman", "awayPoints": 17,
+                "homeClassification": "fcs", "awayClassification": "fcs"}]
         rows, skipped = fetch_games.extract_fbs_games(raw)
-        self.assertEqual([r["home_team"] for r in rows], ["Texas"])
-        self.assertEqual(skipped["not_fbs_matchup"], 1)
+        self.assertEqual(rows, [])
+        self.assertEqual(skipped["no_fbs_side"], 1)
 
     def test_keeps_games_with_unknown_classification(self):
         """A missing classification is not evidence the opponent is not FBS."""
@@ -147,7 +158,8 @@ class TestCsvHandoff(unittest.TestCase):
         with open(path, newline="", encoding="utf-8") as fh:
             header = next(csv.reader(fh))
         self.assertEqual(header, ["date", "home_team", "home_score",
-                                  "away_team", "away_score"])
+                                  "away_team", "away_score",
+                                  "home_ranked", "away_ranked"])
 
     def test_ranker_loads_the_written_file(self):
         path = self._write_rows([
@@ -179,6 +191,46 @@ class TestCsvHandoff(unittest.TestCase):
         ])
         with self.assertRaises(DuplicateGameError):
             FBSRoundRobinRanker(on_duplicate="error").load_csv(path)
+
+
+class TestUnrankedUpsets(unittest.TestCase):
+    """Losses to an unranked opponent are found and surfaced."""
+
+    def _fcs_game(self, fbs, fbs_pts, fcs, fcs_pts):
+        return {"homeTeam": fbs, "homePoints": fbs_pts,
+                "awayTeam": fcs, "awayPoints": fcs_pts,
+                "homeClassification": "fbs", "awayClassification": "fcs",
+                "startDate": "2025-09-06T16:00:00.000Z"}
+
+    def test_finds_a_loss_to_an_unranked_opponent(self):
+        rows, _ = fetch_games.extract_fbs_games([
+            self._fcs_game("Alabama", 55, "Mercer", 3),      # routine win
+            self._fcs_game("Army", 20, "Tarleton State", 27),  # the upset
+        ])
+        upsets = fetch_games.find_unranked_upsets(rows)
+        self.assertEqual([(w, l) for _, w, l in upsets],
+                         [("Tarleton State", "Army")])
+
+    def test_an_all_ranked_game_is_never_an_upset(self):
+        rows, _ = fetch_games.extract_fbs_games(
+            [fbs_game("Oklahoma", 24, "Texas", 31)])
+        self.assertEqual(fetch_games.find_unranked_upsets(rows), [])
+
+    def test_the_upset_reaches_the_ranker_as_a_loss(self):
+        rows, _ = fetch_games.extract_fbs_games([
+            self._fcs_game("Army", 20, "Tarleton State", 27),
+            fbs_game("Army", 30, "Navy", 10),
+        ])
+        fh = tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False)
+        fh.close()
+        self.addCleanup(os.unlink, fh.name)
+        fetch_games.write_csv(rows, fh.name)
+        ranker = FBSRoundRobinRanker()
+        ranker.load_csv(fh.name)
+        self.assertEqual(ranker._overall_record("Army")[:2], (1, 1))
+        self.assertNotIn("Tarleton State", ranker.teams)
+        self.assertNotIn("Tarleton State",
+                         [r["team"] for r in ranker.rank()])
 
 
 class TestApiLayer(unittest.TestCase):

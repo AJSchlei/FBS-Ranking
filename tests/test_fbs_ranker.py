@@ -26,7 +26,7 @@ import sys
 # Allow running tests from the repo root without installing the package.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fbs_ranker import (FBSRoundRobinRanker, DuplicateGameError,
-                        generate_demo_games)
+                        generate_demo_games, _is_ranked)
 
 
 # ---------------------------------------------------------------------------
@@ -1006,6 +1006,100 @@ class TestOverallRecordInOutput(unittest.TestCase):
     def test_every_row_has_played_at_least_one_game(self):
         for row in self.results:
             self.assertGreater(row["overall_wins"] + row["overall_losses"], 0)
+
+
+class TestUnrankedOpponents(unittest.TestCase):
+    """A game against an unranked opponent counts in the record only.
+
+    This is how a loss to an FCS team becomes visible: it hurts the FBS team's
+    record, while the FCS team stays out of the graph and the standings.
+    """
+
+    def setUp(self):
+        self.r = make_ranker(("Army", "Navy", 30, 10))
+        # Tarleton State beat Army and is not itself ranked.
+        self.r.add_game("Army", "Tarleton State", 20, 27, away_ranked=False)
+
+    def test_the_unranked_team_is_not_ranked(self):
+        self.assertNotIn("Tarleton State", self.r.teams)
+        self.assertNotIn("Tarleton State", ranked_names(self.r.rank()))
+
+    def test_it_is_remembered_as_an_opponent(self):
+        self.assertIn("Tarleton State", self.r.unranked_opponents)
+        self.assertEqual(self.r.get_unranked_results("Army"),
+                         [("Tarleton State", 20, 27)])
+
+    def test_the_loss_counts_in_the_record(self):
+        self.assertEqual(self.r._overall_record("Army")[:2], (1, 1))
+
+    def test_points_count_too(self):
+        _, _, pf, pa = self.r._overall_record("Army")
+        self.assertEqual((pf, pa), (30 + 20, 10 + 27))
+
+    def test_it_never_enters_a_round_robin_group(self):
+        for row in self.r.rank():
+            self.assertNotIn("Tarleton State", str(row))
+        self.assertEqual(self.r.get_results("Army", "Tarleton State"), [])
+
+    def test_total_games_counts_it(self):
+        self.assertEqual(self.r.total_games(), 2)
+
+    def test_a_game_between_two_unranked_teams_is_ignored(self):
+        r = make_ranker(("A", "B", 30, 10))
+        r.add_game("Mercer", "Furman", 20, 17,
+                   home_ranked=False, away_ranked=False)
+        self.assertEqual(r.teams, {"A", "B"})
+        self.assertEqual(r.total_games(), 1)
+
+    def test_an_unranked_home_side_works_the_same_way(self):
+        r = make_ranker(("A", "B", 30, 10))
+        r.add_game("Tarleton State", "A", 27, 20, home_ranked=False)
+        self.assertEqual(r._overall_record("A")[:2], (1, 1))
+        self.assertEqual(r.get_unranked_results("A"),
+                         [("Tarleton State", 20, 27)])
+
+    def test_beating_an_unranked_team_is_still_a_win(self):
+        r = make_ranker(("A", "B", 30, 10))
+        r.add_game("A", "Mercer", 55, 3, away_ranked=False)
+        self.assertEqual(r._overall_record("A")[:2], (2, 0))
+
+
+class TestRankedColumnParsing(unittest.TestCase):
+    """The optional home_ranked / away_ranked CSV columns."""
+
+    def _write(self, header, rows):
+        fh = tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False,
+                                         newline="", encoding="utf-8")
+        writer = csv.writer(fh)
+        writer.writerow(header)
+        writer.writerows(rows)
+        fh.close()
+        self.addCleanup(os.unlink, fh.name)
+        return fh.name
+
+    def test_missing_columns_mean_everyone_is_ranked(self):
+        path = self._write(["home_team", "home_score", "away_team", "away_score"],
+                           [["A", 30, "B", 10]])
+        r = FBSRoundRobinRanker()
+        r.load_csv(path)
+        self.assertEqual(r.teams, {"A", "B"})
+        self.assertEqual(r.unranked_opponents, set())
+
+    def test_false_marks_a_team_unranked(self):
+        path = self._write(
+            ["home_team", "home_score", "away_team", "away_score",
+             "home_ranked", "away_ranked"],
+            [["A", 20, "Tarleton State", 27, "true", "false"]])
+        r = FBSRoundRobinRanker()
+        r.load_csv(path)
+        self.assertEqual(r.teams, {"A"})
+        self.assertEqual(r._overall_record("A")[:2], (0, 1))
+
+    def test_accepted_spellings(self):
+        for value in ["false", "False", "FALSE", "0", "no", "n", "unranked"]:
+            self.assertFalse(_is_ranked(value), value)
+        for value in ["true", "True", "1", "yes", "", None, "anything"]:
+            self.assertTrue(_is_ranked(value), repr(value))
 
 
 if __name__ == "__main__":

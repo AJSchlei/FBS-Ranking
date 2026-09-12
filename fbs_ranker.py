@@ -56,6 +56,18 @@ from itertools import groupby
 import networkx as nx
 
 
+#: Values in a home_ranked / away_ranked column that mean "do not rank this team".
+_UNRANKED_VALUES = frozenset({"false", "0", "no", "n", "unranked"})
+
+
+def _is_ranked(value) -> bool:
+    """Interpret a home_ranked / away_ranked cell.  Missing or blank = ranked."""
+    if value is None:
+        return True
+    text = str(value).strip().lower()
+    return text not in _UNRANKED_VALUES if text else True
+
+
 class DuplicateGameError(ValueError):
     """Raised when a dataset contains two games between the same pair of teams.
 
@@ -76,6 +88,8 @@ class FBSRoundRobinRanker:
         on_duplicate (str): What to do when the same pair of teams appears
             more than once — "combine" (default), "error", "keep_first", or
             "keep_last".
+        unranked_opponents (set): Names of opponents that were marked unranked
+            and so are excluded from the rankings.
 
     Class attributes:
         PRIOR_GAMES: Phantom .500 games added to each team's overall record
@@ -102,6 +116,13 @@ class FBSRoundRobinRanker:
             )
         self.on_duplicate = on_duplicate
         self.teams: set = set()
+        # Games against opponents that are not themselves ranked — an FCS team
+        # on an FBS schedule, say.  team -> [(opponent, points_for, points_against)]
+        # They count toward the ranked team's record but never become nodes in
+        # the game graph, never form a group, and never appear in the output.
+        self._unranked_games: dict = {}
+        #: Names of every unranked opponent seen, for reporting.
+        self.unranked_opponents: set = set()
         # Canonical key: (team_a, team_b) with team_a < team_b (lexicographic).
         # Value: list of (score_for_team_a, score_for_team_b), in the order the
         # games were added.  A pair that met twice — a conference championship
@@ -117,6 +138,10 @@ class FBSRoundRobinRanker:
 
         Required columns: home_team, home_score, away_team, away_score
 
+        Optional columns home_ranked / away_ranked mark an opponent that should
+        not be ranked (see add_game).  Accepted values are false/0/no/n for
+        unranked; anything else, including a missing column, means ranked.
+
         Raises:
             DuplicateGameError: if two rows describe the same pair of teams and
                 on_duplicate is "error".  The message names the offending line
@@ -130,15 +155,53 @@ class FBSRoundRobinRanker:
                 home_score = int(row["home_score"])
                 away_score = int(row["away_score"])
                 try:
-                    self._add_game(home, away, home_score, away_score)
+                    self.add_game(home, away, home_score, away_score,
+                                  home_ranked=_is_ranked(row.get("home_ranked")),
+                                  away_ranked=_is_ranked(row.get("away_ranked")))
                 except DuplicateGameError as exc:
                     raise DuplicateGameError(
                         f"{filepath} line {reader.line_num}: {exc}"
                     ) from None
 
-    def add_game(self, home: str, away: str, home_score: int, away_score: int) -> None:
-        """Add a single game result programmatically."""
-        self._add_game(home, away, home_score, away_score)
+    def add_game(self, home: str, away: str, home_score: int, away_score: int,
+                 home_ranked: bool = True, away_ranked: bool = True) -> None:
+        """Add a single game result programmatically.
+
+        Set home_ranked or away_ranked to False for an opponent that should not
+        be ranked — an FCS team on an FBS schedule, for instance.  That game
+        still counts toward the ranked team's record and points, which is what
+        makes an upset loss visible, but the unranked team never becomes a node
+        in the game graph, never forms a round-robin group, and never appears
+        in the rankings.
+
+        An unranked opponent played by only one ranked team could not help
+        compare two ranked teams anyway, so keeping it out of the graph costs
+        nothing; and letting it in on a single game would place it on almost no
+        evidence, which measurably distorts everything below it.
+
+        A game between two unranked teams is ignored entirely.
+        """
+        if home_ranked and away_ranked:
+            self._add_game(home, away, home_score, away_score)
+        elif home_ranked:
+            self._add_unranked_game(home, away, home_score, away_score)
+        elif away_ranked:
+            self._add_unranked_game(away, home, away_score, home_score)
+        # neither ranked: nothing to record
+
+    def _add_unranked_game(self, team: str, opponent: str,
+                           points_for: int, points_against: int) -> None:
+        self.teams.add(team)
+        self.unranked_opponents.add(opponent)
+        self._unranked_games.setdefault(team, []).append(
+            (opponent, points_for, points_against))
+
+    def get_unranked_results(self, team: str) -> list:
+        """Games this team played against unranked opponents.
+
+        Returns a list of (opponent, points_for, points_against).
+        """
+        return list(self._unranked_games.get(team, ()))
 
     def _add_game(self, team_a: str, team_b: str, score_a: int, score_b: int) -> None:
         # Canonicalise so A-vs-B and B-vs-A land on the same key.
@@ -194,8 +257,10 @@ class FBSRoundRobinRanker:
         return results[0] if results else None
 
     def total_games(self) -> int:
-        """Number of games loaded, counting every meeting of a repeated pair."""
-        return sum(len(meetings) for meetings in self._game_map.values())
+        """Games loaded: every meeting of a repeated pair, plus games against
+        unranked opponents."""
+        return (sum(len(m) for m in self._game_map.values())
+                + sum(len(g) for g in self._unranked_games.values()))
 
     def _record_in_group(self, team: str, group) -> tuple:
         """Return (wins, losses, points_for, points_against) for *team* vs every
@@ -262,6 +327,12 @@ class FBSRoundRobinRanker:
                 pf += st; pa += so
                 if st > so: w += 1
                 else: l += 1
+
+        # Games against unranked opponents count here and nowhere else.
+        for _opponent, st, so in self._unranked_games.get(team, ()):
+            pf += st; pa += so
+            if st > so: w += 1
+            else: l += 1
         return w, l, pf, pa
 
     def _verdict_in_group(self, team_a: str, team_b: str, group):
@@ -396,9 +467,13 @@ class FBSRoundRobinRanker:
                                 nothing separates share a rank, and the next
                                 rank skips accordingly (1, 2, 2, 4, ...).
                 team          - team name string
-                overall_wins  - wins across every game played
-                overall_losses- losses across every game played
-                overall_win_pct - overall wins / games, rounded to 3 dp
+                overall_wins  - wins across every game in the loaded data,
+                                including games against unranked opponents
+                overall_losses- losses on the same basis
+                overall_win_pct - those wins / those games, rounded to 3 dp
+                                (this is the record within the dataset; it
+                                matches a published record only if the data
+                                covers every game the team played)
                 group_size    - size of the team's largest (primary) clique
                 wins          - wins inside that primary clique only
                 losses        - losses inside that primary clique only
@@ -670,8 +745,10 @@ def print_rankings(results: list) -> None:
     print()
     print("=" * 96)
     print("  FBS ROUND-ROBIN RANKINGS")
-    print("  Overall = full season record.  In-Grp / Grp% / PF / PA / Diff "
-          "cover games inside the team's group only.")
+    print("  Overall = record across every game in this dataset, including "
+          "games against unranked opponents.")
+    print("  In-Grp / Grp% / PF / PA / Diff cover games inside the team's "
+          "round-robin group only.")
     print("=" * 96)
     hdr = (f"  {'Rank':<5} {'Team':<22} {'Overall':<8} {'Grp':<4} "
            f"{'In-Grp':<7} {'Grp%':<7} {'PF':<6} {'PA':<6} {'Diff'}")

@@ -160,8 +160,19 @@ Fetching 2025 regular games …
   skipped: 1 not final, 1 not an FBS-vs-FBS matchup, 0 missing fields
 ```
 
-Games against FCS opponents are dropped because an opponent only one FBS team
-played adds an edge to the game graph without adding any comparison.
+Games against FCS opponents are **kept**, with the FCS side marked unranked —
+see "Unranked opponents" below.  Games where neither side is FBS are dropped.
+Because those games are counted, the records shown match published ones.
+
+Losses to an unranked opponent are listed explicitly, since they are the
+results most worth seeing:
+
+```
+4 loss(es) to an unranked opponent — these count against the FBS team:
+  2025-08-30  Tarleton State 27-20 Army
+  2025-09-06  Austin Peay 24-17 Middle Tennessee
+  ...
+```
 
 Pairs that met more than once are listed, and **both meetings are written**,
 because the ranker counts every meeting:
@@ -180,6 +191,43 @@ with points from both games.
 Use `--on-duplicate keep_first` or `keep_last` to write only one meeting, or
 `error` to refuse a season containing any rematch.  The script only reads from
 the API; it never writes anything back.
+
+---
+
+## Unranked opponents
+
+An FBS schedule usually includes one FCS opponent.  Those games are loaded, but
+the FCS team is marked **unranked**: the result counts toward the FBS team's
+record and points, while the FCS team never becomes a node in the game graph,
+never forms a round-robin group, and never appears in the output.
+
+```python
+ranker.add_game("Army", "Tarleton State", 20, 27, away_ranked=False)
+```
+
+In a CSV the optional `home_ranked` / `away_ranked` columns carry the same
+information — `false`, `0`, `no`, `n` or `unranked` mean unranked; anything
+else, including a missing column, means ranked.  `fetch_games.py` writes them.
+
+**Why count the game but not rank the team.**  Dropping these games hides the
+most damning result a team can have: in 2025 Army, Middle Tennessee, Eastern
+Michigan and Massachusetts each lost to an FCS team and none of it showed.  But
+ranking an FCS team on its single FBS game places it on almost no evidence — an
+FCS team that went 1-0 landed around 36th of 259 in testing, dragging
+everything below it down.  Counting the result without ranking the opponent
+avoids both failures.
+
+**What it is worth, honestly.**  Adding the four 2025 upsets moves Eastern
+Michigan from 91st to 101st and Middle Tennessee by one place.  Army does not
+move at all: its position is fixed by a 6-team group whose verdicts outrank any
+record-based one.  Massachusetts does not move either, being already last.  The
+real gain is that records match published ones; the ranking effect is small.
+
+It also cannot express *how bad* a loss was.  Army lost to an 11-1 Tarleton
+State and Massachusetts to a 3-9 Bryant, and both count the same, because the
+only magnitude in this system is the shrunk win percentage — one loss is one
+loss.  Weighing a loss by opponent quality needs the strength-of-schedule work
+described under "Assumptions & limitations".
 
 ---
 
@@ -386,9 +434,9 @@ for row in results:
 |-------|------|-------------|
 | `rank` | int | Position (1 = best).  Tied teams share a rank and the next rank skips: 1, 2, 2, 4 |
 | `team` | str | Team name |
-| `overall_wins` | int | Wins across every game played |
-| `overall_losses` | int | Losses across every game played |
-| `overall_win_pct` | float | Overall wins / games, rounded to 3 dp |
+| `overall_wins` | int | Wins across every game in the loaded data, including games against unranked opponents |
+| `overall_losses` | int | Losses across every game in the loaded data |
+| `overall_win_pct` | float | Those wins / those games, rounded to 3 dp |
 | `group_size` | int | Number of teams in the round-robin group used for ranking |
 | `wins` | int | Wins against group opponents **only** |
 | `losses` | int | Losses against group opponents **only** |
@@ -454,7 +502,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-109 tests cover:
+127 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -480,6 +528,9 @@ of this file shows the latest result.
   both games, a sweep as 2-0, and combine landing between keep_first and
   keep_last rather than picking a winner
 - The overall record reported alongside the in-group one
+- Unranked opponents: counted in the record and points, kept out of the teams
+  list, the graph and the output; both-unranked games ignored; every accepted
+  CSV column spelling; and a fetched upset reaching the ranker as a loss
 - `fetch_games.py`: both of CFBD's field-naming styles, unplayed and non-FBS
   games dropped, rematches found despite reversed sides, and the CSV it writes
   loading into the ranker (the API layer runs against a stub, never the network)
@@ -501,9 +552,10 @@ of this file shows the latest result.
   those verdicts lock in first and override about 1,500 record-based ones —
   but the tool leans on the fallback far more than the name suggests.
 - **No overtime distinction.**  A win is a win regardless of overtime.
-- **FBS-only games recommended.**  Including FCS or non-D1 opponents may
-  create unexpected edges in the game graph.  Filter to FBS-vs-FBS games
-  before loading for best results.
+- **Non-FBS opponents must be marked unranked.**  Loading an FCS opponent as a
+  ranked team puts it in the game graph on the strength of one game, which
+  places it on almost no evidence: measured on the 2025 data, an FCS team that
+  went 1-0 landed around 36th of 259.  `fetch_games.py` marks them for you.
 - **No strength of schedule.**  The strength-0 fallback now accounts for how
   many games a record covers, but still not for whom they were against: two
   teams with identical shrunk records are separated by point differential, not

@@ -6,10 +6,13 @@ The output is exactly what fbs_ranker.py reads:
 
     date,home_team,home_score,away_team,away_score
 
-Only completed FBS-vs-FBS games are written.  Games involving an FCS or
-non-Division-I opponent are dropped, because an opponent that only a single FBS
-team played adds an edge to the game graph without adding any comparison —
-see the "FBS-only games recommended" note in README.md.
+Completed games are written with a home_ranked / away_ranked column marking
+whether each side belongs in the rankings.  A game against an FCS or other
+non-FBS opponent is kept, with that side marked unranked: it counts toward the
+FBS team's record — which is how a loss to an FCS team shows up at all — while
+the FCS team stays out of the game graph and out of the standings.
+
+Games between two non-FBS teams are dropped; neither side would be ranked.
 
 An API key is required (free, from https://collegefootballdata.com/key).  Pass
 it with --api-key or, better, put it in the CFBD_API_KEY environment variable
@@ -84,12 +87,14 @@ def _first(record, *names):
 
 
 def extract_fbs_games(raw_games):
-    """Turn raw API records into ranker rows, keeping completed FBS-vs-FBS only.
+    """Turn raw API records into ranker rows.
 
-    Returns (rows, skipped) where skipped counts why records were dropped.
+    Keeps every completed game with at least one FBS side, marking any non-FBS
+    opponent unranked.  Returns (rows, skipped) where skipped counts why
+    records were dropped.
     """
     rows = []
-    skipped = {"not_final": 0, "not_fbs_matchup": 0, "missing_fields": 0}
+    skipped = {"not_final": 0, "no_fbs_side": 0, "missing_fields": 0}
 
     for game in raw_games:
         home = _first(game, "homeTeam", "home_team")
@@ -107,10 +112,12 @@ def extract_fbs_games(raw_games):
 
         home_div = _first(game, "homeClassification", "home_classification")
         away_div = _first(game, "awayClassification", "away_classification")
-        # Only drop when the API actually tells us the opponent is not FBS;
-        # a missing classification is not evidence either way.
-        if (home_div and home_div != "fbs") or (away_div and away_div != "fbs"):
-            skipped["not_fbs_matchup"] += 1
+        # A missing classification is not evidence the team is non-FBS, so
+        # treat only an explicit non-fbs value as unranked.
+        home_ranked = not (home_div and home_div != "fbs")
+        away_ranked = not (away_div and away_div != "fbs")
+        if not home_ranked and not away_ranked:
+            skipped["no_fbs_side"] += 1
             continue
 
         start = _first(game, "startDate", "start_date") or ""
@@ -120,6 +127,8 @@ def extract_fbs_games(raw_games):
             "home_score": int(home_score),
             "away_team": str(away).strip(),
             "away_score": int(away_score),
+            "home_ranked": str(home_ranked).lower(),
+            "away_ranked": str(away_ranked).lower(),
         })
 
     return rows, skipped
@@ -158,8 +167,24 @@ def apply_duplicate_policy(rows, policy):
     return kept
 
 
+def find_unranked_upsets(rows):
+    """Games an unranked opponent won: the results most worth surfacing."""
+    upsets = []
+    for row in rows:
+        home_ranked = row.get("home_ranked", "true") == "true"
+        away_ranked = row.get("away_ranked", "true") == "true"
+        if home_ranked == away_ranked:
+            continue                       # both ranked, or neither
+        if home_ranked and row["away_score"] > row["home_score"]:
+            upsets.append((row, row["away_team"], row["home_team"]))
+        elif away_ranked and row["home_score"] > row["away_score"]:
+            upsets.append((row, row["home_team"], row["away_team"]))
+    return upsets
+
+
 def write_csv(rows, path):
-    fields = ["date", "home_team", "home_score", "away_team", "away_score"]
+    fields = ["date", "home_team", "home_score", "away_team", "away_score",
+              "home_ranked", "away_ranked"]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
@@ -204,11 +229,23 @@ def main(argv=None):
         raw.extend(fetch_games(args.year, season_type, api_key))
 
     rows, skipped = extract_fbs_games(raw)
+    unranked = sum(1 for r in rows
+                   if "false" in (r["home_ranked"], r["away_ranked"]))
     print(f"  {len(raw)} records returned")
-    print(f"  {len(rows)} completed FBS-vs-FBS games kept")
+    print(f"  {len(rows)} completed games kept "
+          f"({len(rows) - unranked} FBS-vs-FBS, {unranked} vs an unranked opponent)")
     print(f"  skipped: {skipped['not_final']} not final, "
-          f"{skipped['not_fbs_matchup']} not an FBS-vs-FBS matchup, "
+          f"{skipped['no_fbs_side']} with no FBS side, "
           f"{skipped['missing_fields']} missing fields")
+
+    upsets = find_unranked_upsets(rows)
+    if upsets:
+        print(f"\n{len(upsets)} loss(es) to an unranked opponent — "
+              f"these count against the FBS team:")
+        for row, winner, loser in sorted(upsets, key=lambda u: u[0]["date"]):
+            ws = max(row["home_score"], row["away_score"])
+            ls = min(row["home_score"], row["away_score"])
+            print(f"  {row['date']}  {winner} {ws}-{ls} {loser}")
 
     duplicates = find_duplicate_pairs(rows)
     if duplicates:
