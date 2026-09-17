@@ -38,12 +38,20 @@ one made inside the larger group wins.
 
    A smaller group can therefore only speak where every larger one stayed
    silent; it can never reverse an order a larger group established.
-   d. No shared clique at all -> compare overall (all-games) win
-      percentage REGRESSED TOWARD .500, then overall point differential,
-      then team name.  See "Comparing teams with no shared group".
 
-   Each verdict carries a STRENGTH: the size of the group that decided it.
-   Step (d) has strength 0 — the weakest evidence there is.
+   c. No shared clique at all -> look at COMMON OPPONENTS.  Count the
+      shared opponents the two teams did NOT fare the same against.  Once
+      at least MIN_DIFFERING_RESULTS of them differ (default 2), compare
+      the two teams' records against ALL their shared opponents.
+      See "Common opponents".
+   d. Still nothing -> compare an OPPONENT-WEIGHTED BLEND of each team's
+      own record and its opponents' records, then overall point
+      differential.  See "Comparing teams with no shared group".
+
+   Each verdict carries a STRENGTH: the size of the group that decided it,
+   or 1 for common opponents, or 0 for the blend.  Because every group is
+   size 2 or larger, playing someone always outranks merely having played
+   the same people, which always outranks the blend.
 
 4. Combine the verdicts into one global order (Tideman's ranked pairs)
 
@@ -298,12 +306,47 @@ outranks B and they are not tied, even with no head-to-head between them.
 
 ---
 
+## Common opponents
+
+Two teams that never met may still have played some of the same opponents.  If
+A beat C and B lost to C, that is real comparative evidence, and it sits at
+strength 1 -- below every round-robin group, above the blend.
+
+The tier counts **differing** results, not shared opponents.  In the 2025 data
+LSU and Missouri share six opponents (Alabama, Arkansas, Oklahoma, South
+Carolina, Texas A&M, Vanderbilt) and got the *same* result against all six.
+Six common opponents, zero information.  Counting shared opponents would call
+that overwhelming evidence; counting differing ones correctly calls it none.
+
+`MIN_DIFFERING_RESULTS` (default 2) is how many must differ before the tier
+speaks.  One differing result is a single game, and a single game between two
+teams who never met is thin enough to hand a team with a poor record a large
+jump; requiring two keeps the tier to cases with corroboration.  Set it to 0
+to switch the tier off entirely.
+
+Once the threshold is met, the comparison uses each team's record against
+**every** shared opponent -- including the ones they agreed on, which act as a
+common baseline -- then the point differential in those games.  Opponents
+marked unranked count here: a shared FCS opponent is still a shared opponent.
+
+On the 2025 regular season, of the 8,425 pairs who never played each other:
+
+| Differing common opponents | Pairs | |
+|---|---|---|
+| 0 | 6,746 | tier silent |
+| 1 | 1,341 | tier silent at the default threshold |
+| 2 or more | 338 | tier speaks (286 produce a verdict; the rest are level) |
+
+Those 286 verdicts move 17 teams and change nothing inside the top 25.
+
+---
+
 ## Comparing teams with no shared group
 
-When two teams never played and belong to no common round-robin group, there
-is no group evidence to go on and the tool falls back to their overall
-records.  Raw win percentage is a poor judge here, because it ignores how many
-games each record covers -- it ranks a 2-0 team above a 7-1 team.
+When two teams never played, share no round-robin group, and have too few
+differing common opponents, the tool falls back to their records.  Raw win
+percentage is a poor judge here, because it ignores how many games each record
+covers -- it ranks a 2-0 team above a 7-1 team.
 
 So the fallback adds `PRIOR_GAMES` phantom games, split evenly as wins and
 losses, to every team before comparing:
@@ -338,6 +381,42 @@ changed (`ranker.PRIOR_GAMES = 6`) or switched off entirely by setting it to
 0, which restores raw overall win percentage.  The ordering it produces is
 stable anywhere from roughly 2 to 10.
 
+### Weighting opponents
+
+A shrunk record still treats every win as equal.  At strength 0 the two teams
+have no evidentiary relationship at all, so the only thing left to compare is
+who each of them played.  `BLEND_WEIGHTS` sets that blend, as
+`(own record, opponents' records, opponents' opponents' records)`:
+
+```
+blended score = a x WP + b x OWP + c x OOWP     # default (0.5, 0.5, 0.0)
+```
+
+`(1.0, 0.0, 0.0)` is the plain shrunk record and reproduces the older
+behaviour exactly.  Every term is shrunk the same way, and an opponent's
+record is computed with the games against the team being scored **removed** --
+otherwise beating an opponent would lower their record and so penalise the
+team that beat them.  Unranked opponents are left out of OWP and OOWP, since
+the data says nothing about how they fared against anyone else.
+
+What this changes on the 2025 regular season:
+
+- **LSU (6-5) finishes above Missouri and Tennessee (both 7-4).**  LSU's five
+  losses were all to top-12 teams; Missouri's schedule included UMass and
+  Kansas.  This is the blend doing what it is for, and it is also the clearest
+  case to look at if you decide you do not want it.
+- Pairs where the lower-ranked team has a win percentage at least .150 better
+  go from 624 to 640 -- a 2.6% increase.  The large record inversions in the
+  output (James Madison at 11-1 sitting below several 6-6 SEC teams) come from
+  the group tiers and are unchanged by the blend.
+- A winless team can outrank a team with a win when its only game was against
+  a strong opponent.  `TestIndependentTeams` covers the smallest such case.
+
+**The blend can never reorder teams a group or common opponents settled.**
+Strength 0 is the last tier consulted, and ranked pairs locks stronger
+verdicts first, so a blend verdict is discarded whenever it contradicts one.
+`TestTierHierarchyHolds` asserts this across five weightings.
+
 ---
 
 ## Conflicts between groups
@@ -348,7 +427,7 @@ A worked example, as covered by `TestConflictingVerdicts`:
 |---------|-----------|----------|
 | A over B | 4-team group `{A, B, X1, X2}` | 4 |
 | B over C | 3-team group `{B, C, Y1}` | 3 |
-| C over A | no shared group — overall record only | 0 |
+| C over A | no shared group — opponent-weighted blend | 0 |
 
 Those three verdicts form a cycle.  Ranked pairs locks in *A over B* (strength
 4), then *B over C* (strength 3), and then discards *C over A* because the two
@@ -502,7 +581,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-127 tests cover:
+153 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -531,6 +610,16 @@ of this file shows the latest result.
 - Unranked opponents: counted in the record and points, kept out of the teams
   list, the graph and the output; both-unranked games ignored; every accepted
   CSV column spelling; and a fetched upset reaching the ranker as a loss
+- Common opponents: shared versus differing results counted correctly, the
+  tier staying silent below the threshold and speaking at it,
+  MIN_DIFFERING_RESULTS = 0 disabling it, level shared records deciding
+  nothing, unranked and twice-played shared opponents both counted, and two
+  teams that met never reaching strength 1 at all (a shared opponent
+  completes the triangle, so they are always in a group together)
+- The blend: (1, 0, 0) reproducing the shrunk record, weights interpolating,
+  an opponent's record excluding the team being scored, unranked opponents
+  staying out of the averages, cached metrics recomputing when a game is added
+  or PRIOR_GAMES changes, and group order surviving all five weightings tried
 - `fetch_games.py`: both of CFBD's field-naming styles, unplayed and non-FBS
   games dropped, rematches found despite reversed sides, and the CSV it writes
   loading into the ranker (the API layer runs against a stub, never the network)
@@ -547,21 +636,27 @@ of this file shows the latest result.
 - **Round-robin groups are small in practice.**  Modern conferences are far
   larger than the number of conference games each team plays, so complete
   round-robins barely exist.  In the 2025 FBS regular season the largest group
-  was 7 teams (the Sun Belt), and 92% of team pairs shared no group at all and
-  were compared on record.  The group evidence still does heavy lifting —
-  those verdicts lock in first and override about 1,500 record-based ones —
-  but the tool leans on the fallback far more than the name suggests.
+  was 7 teams (the Sun Belt), and 92% of team pairs shared no group at all.
+  The group evidence still does heavy lifting — group verdicts lock in first
+  and chain transitively to settle about 75% of all pairs — but the weaker
+  tiers carry more of the load than the name suggests.
 - **No overtime distinction.**  A win is a win regardless of overtime.
 - **Non-FBS opponents must be marked unranked.**  Loading an FCS opponent as a
   ranked team puts it in the game graph on the strength of one game, which
   places it on almost no evidence: measured on the 2025 data, an FCS team that
   went 1-0 landed around 36th of 259.  `fetch_games.py` marks them for you.
-- **No strength of schedule.**  The strength-0 fallback now accounts for how
-  many games a record covers, but still not for whom they were against: two
-  teams with identical shrunk records are separated by point differential, not
-  by the quality of their opponents.  An opponent-adjusted fallback (in the
-  style of RPI) is the clearest next improvement, at the cost of running a
-  second rating system alongside the round-robin logic.
+- **Strength of schedule lives only in the weakest tier.**  Ranked pairs
+  produces an *ordering*, not a rating: it can say one team finishes below
+  another but never by how much.  Only the strength-0 blend carries magnitude,
+  which is why opponent quality is applied there and nowhere else.  That is
+  deliberate — it is what guarantees schedule strength can never overturn a
+  result on the field — but it also means two teams a group has already
+  separated are never re-examined in light of whom they played.
+- **One differing common opponent is ignored by default.**  1,341 pairs in the
+  2025 data have exactly one, and the default threshold of 2 sends all of them
+  to the blend.  Some of those single results are genuinely informative;
+  `MIN_DIFFERING_RESULTS = 1` uses them, at the cost of letting one game move
+  a team a long way.
 - **Maximum clique complexity.**  Finding all maximal cliques is NP-hard in
   general, but FBS schedules (≈130 teams, ≈12 games each) are sparse enough
   that the Bron-Kerbosch algorithm finishes in milliseconds.

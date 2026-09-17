@@ -95,12 +95,29 @@ class FBSRoundRobinRanker:
         PRIOR_GAMES: Phantom .500 games added to each team's overall record
             before comparing two teams that share no round-robin group.
             See _shrunk_win_pct.  Set to 0 to compare on raw overall record.
+        MIN_DIFFERING_RESULTS: How many shared opponents must have given the
+            two teams different results before the common-opponent tier
+            (strength 1) issues a verdict.  Set to 0 to disable that tier.
+        BLEND_WEIGHTS: (own, opponents', opponents' opponents') weights for
+            the strength-0 metric.  (1, 0, 0) is the plain shrunk record.
     """
 
     # Four is enough to stop a 2-0 record outranking a 7-1 one, and small
     # enough to leave full-season records essentially untouched.  The ordering
     # it produces is stable for anything from roughly 2 to 10.
     PRIOR_GAMES = 4.0
+
+    # How many common opponents must have given DIFFERENT results before the
+    # common-opponent tier speaks.  Two teams sharing five opponents but
+    # getting the same result against four of them have one game of evidence,
+    # not five, so this counts what actually discriminates rather than what is
+    # merely shared.  Set to 0 to switch the tier off.
+    MIN_DIFFERING_RESULTS = 2
+
+    # Weights for the strength-0 metric, as (own record, opponents' records,
+    # opponents' opponents' records); they should sum to 1.  (1, 0, 0) is the
+    # plain shrunk record.  The default splits own record and opponents evenly.
+    BLEND_WEIGHTS = (0.5, 0.5, 0.0)
 
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a
@@ -121,6 +138,9 @@ class FBSRoundRobinRanker:
         # They count toward the ranked team's record but never become nodes in
         # the game graph, never form a group, and never appear in the output.
         self._unranked_games: dict = {}
+        # Cache for the derived opponent metrics; cleared whenever a game is
+        # added, rebuilt on first use.
+        self._metrics_cache = None
         #: Names of every unranked opponent seen, for reporting.
         self.unranked_opponents: set = set()
         # Canonical key: (team_a, team_b) with team_a < team_b (lexicographic).
@@ -195,6 +215,7 @@ class FBSRoundRobinRanker:
         self.unranked_opponents.add(opponent)
         self._unranked_games.setdefault(team, []).append(
             (opponent, points_for, points_against))
+        self._metrics_cache = None
 
     def get_unranked_results(self, team: str) -> list:
         """Games this team played against unranked opponents.
@@ -232,6 +253,7 @@ class FBSRoundRobinRanker:
         self.teams.add(team_a)
         self.teams.add(team_b)
         self._game_map.setdefault(key, []).append(value)
+        self._metrics_cache = None
 
     # ------------------------------------------------------------------
     # Game result helpers
@@ -361,6 +383,135 @@ class FBSRoundRobinRanker:
 
         return None
 
+    # ------------------------------------------------------------------
+    # Common opponents (strength 1)
+    # ------------------------------------------------------------------
+
+    def opponents(self, team: str) -> dict:
+        """Every opponent this team faced, mapped to (wins, losses) against it.
+
+        Includes unranked opponents: a non-FBS team both sides played is still
+        a shared result.
+        """
+        out: dict = {}
+        for other in self.teams:
+            if other == team:
+                continue
+            for pf, pa in self.get_results(team, other):
+                w, l = out.get(other, (0, 0))
+                out[other] = (w + 1, l) if pf > pa else (w, l + 1)
+        for other, pf, pa in self._unranked_games.get(team, ()):
+            w, l = out.get(other, (0, 0))
+            out[other] = (w + 1, l) if pf > pa else (w, l + 1)
+        return out
+
+    def _record_against(self, team: str, opponent_names) -> tuple:
+        """(wins, losses, points_for, points_against) versus a set of opponents.
+
+        Unlike _record_in_group this counts unranked opponents too, so a shared
+        non-FBS opponent is not silently skipped.
+        """
+        w = l = pf = pa = 0
+        for other in opponent_names:
+            if other == team:
+                continue
+            results = self.get_results(team, other)
+            results += [(f, a) for o, f, a in self._unranked_games.get(team, ())
+                        if o == other]
+            for st, so in results:
+                pf += st; pa += so
+                if st > so: w += 1
+                else: l += 1
+        return w, l, pf, pa
+
+    def common_opponents(self, team_a: str, team_b: str):
+        """Return (shared, differing) opponent-name sets for two teams.
+
+        *differing* holds the shared opponents the two teams did not fare
+        identically against — the only ones carrying any comparative
+        information.
+        """
+        opp_a, opp_b = self.opponents(team_a), self.opponents(team_b)
+        shared = set(opp_a) & set(opp_b)
+        differing = {o for o in shared
+                     if (opp_a[o][0] > opp_a[o][1]) != (opp_b[o][0] > opp_b[o][1])}
+        return shared, differing
+
+    def _common_opponent_verdict(self, team_a: str, team_b: str):
+        """Compare two teams on their records against shared opponents.
+
+        Returns (cmp, win_pct_gap, point_diff_gap), or None when the teams
+        share too few DIFFERING results (see MIN_DIFFERING_RESULTS) or their
+        shared records are level.
+        """
+        if not self.MIN_DIFFERING_RESULTS:
+            return None
+        shared, differing = self.common_opponents(team_a, team_b)
+        if len(differing) < self.MIN_DIFFERING_RESULTS:
+            return None
+
+        wa, la, pfa, paa = self._record_against(team_a, shared)
+        wb, lb, pfb, pab = self._record_against(team_b, shared)
+        if not (wa + la) or not (wb + lb):
+            return None
+        pct_a, pct_b = self._win_pct(wa, la), self._win_pct(wb, lb)
+        if abs(pct_a - pct_b) <= 1e-9:
+            return None
+        return ((-1 if pct_a > pct_b else 1), abs(pct_a - pct_b),
+                abs((pfa - paa) - (pfb - pab)))
+
+    # ------------------------------------------------------------------
+    # Opponent-weighted metric (strength 0)
+    # ------------------------------------------------------------------
+
+    def _metrics(self) -> dict:
+        """Per-team shrunk win pct, opponents' average, and theirs in turn.
+
+        An opponent's record is computed with the games against the team in
+        question removed: otherwise beating an opponent lowers their record and
+        so penalises the team that beat them.  Unranked opponents are left out
+        of these averages entirely, since the data says nothing about how they
+        fared against anyone else.
+        """
+        # Keyed on PRIOR_GAMES so that changing the shrinkage on an existing
+        # ranker recomputes rather than returning stale numbers.
+        if (self._metrics_cache is not None
+                and self._metrics_cache[0] == self.PRIOR_GAMES):
+            return self._metrics_cache[1]
+
+        opponents = {t: self.opponents(t) for t in self.teams}
+
+        def record_excluding(team, excluded):
+            w = l = 0
+            for other, (ow, ol) in opponents[team].items():
+                if other == excluded:
+                    continue
+                w += ow; l += ol
+            return w, l
+
+        win_pct = {t: self._shrunk_win_pct(*record_excluding(t, None))
+                   for t in self.teams}
+        opp_pct = {}
+        for team in self.teams:
+            vals = [self._shrunk_win_pct(*record_excluding(o, team))
+                    for o in opponents[team] if o in self.teams]
+            opp_pct[team] = sum(vals) / len(vals) if vals else 0.5
+        opp_opp_pct = {}
+        for team in self.teams:
+            vals = [opp_pct[o] for o in opponents[team] if o in self.teams]
+            opp_opp_pct[team] = sum(vals) / len(vals) if vals else 0.5
+
+        self._metrics_cache = (self.PRIOR_GAMES,
+                               {"wp": win_pct, "owp": opp_pct,
+                                "oowp": opp_opp_pct})
+        return self._metrics_cache[1]
+
+    def blended_score(self, team: str) -> float:
+        """The strength-0 metric: own record blended with opponent quality."""
+        a, b, c = self.BLEND_WEIGHTS
+        m = self._metrics()
+        return a * m["wp"][team] + b * m["owp"][team] + c * m["oowp"][team]
+
     def _pairwise_compare(self, team_a: str, team_b: str,
                           all_cliques: list) -> tuple:
         """Compare two teams and report how authoritative the comparison is.
@@ -419,14 +570,22 @@ class FBSRoundRobinRanker:
                         max(v[2] for v in verdicts))
             return cmp, strength
 
-        # No shared clique (or tied across all of them): fall back to overall
-        # record.  group_size 0 marks this as the weakest possible evidence, so
-        # ranked pairs discards it first whenever it conflicts with a group.
-        ow_a, ol_a, opf_a, opa_a = self._overall_record(team_a)
-        ow_b, ol_b, opf_b, opa_b = self._overall_record(team_b)
+        # No shared clique.  Next best evidence is a shared opponent: strength
+        # 1 sits below every group (playing someone beats sharing an opponent
+        # with them) and above the record-based metric.
+        verdict = self._common_opponent_verdict(team_a, team_b)
+        if verdict is not None:
+            cmp, pct_gap, diff_gap = verdict
+            return cmp, (1, pct_gap, diff_gap)
 
-        wpc_a = self._shrunk_win_pct(ow_a, ol_a)
-        wpc_b = self._shrunk_win_pct(ow_b, ol_b)
+        # Nothing connects them.  Fall back to the blended metric at strength
+        # 0, the weakest evidence there is, so ranked pairs discards it first
+        # whenever it conflicts with anything above.
+        _, _, opf_a, opa_a = self._overall_record(team_a)
+        _, _, opf_b, opa_b = self._overall_record(team_b)
+
+        wpc_a = self.blended_score(team_a)
+        wpc_b = self.blended_score(team_b)
         diff_a = opf_a - opa_a
         diff_b = opf_b - opa_b
 
