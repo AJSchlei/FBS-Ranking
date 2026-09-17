@@ -341,20 +341,18 @@ class TestIndependentTeams(unittest.TestCase):
         self.assertLess(self.names.index("X"), self.names.index("I1"))
 
     def test_y_above_i1_on_record_alone(self):
-        """Weighted purely on record, Y (1-2) outranks I1 (0-1)."""
+        """Weighted purely on record, Y (1-2) outranks I1 (0-1).
+
+        This fixture is deliberately pinned to record-only weights.  I1 has
+        played a single game, which is too little schedule for any opponent
+        weighting to mean anything; what this class tests is that teams
+        belonging to no shared group still get placed at all.  For what
+        opponent weighting actually does, see
+        TestOpponentWeightingOnAFullSchedule.
+        """
         self.r.BLEND_WEIGHTS = (1.0, 0.0, 0.0)
         names = ranked_names(self.r.rank())
         self.assertLess(names.index("Y"), names.index("I1"))
-
-    def test_opponent_weighting_lifts_i1_above_y(self):
-        """With opponent quality in the blend, I1 (0-1) outranks Y (1-2).
-
-        I1's single game was a loss to undefeated X; Y's three games include
-        losses to X and to I2 plus a win over winless Z.  This is the blend
-        doing exactly what it is for, and it is the clearest small case of a
-        team with no wins finishing above a team with one.
-        """
-        self.assertLess(self.names.index("I1"), self.names.index("Y"))
 
 
 class TestCSVLoading(unittest.TestCase):
@@ -1374,6 +1372,98 @@ class TestMetricsCacheInvalidation(unittest.TestCase):
         before = r.blended_score("A")
         r.PRIOR_GAMES = 0
         self.assertNotAlmostEqual(before, r.blended_score("A"))
+
+
+class TestOpponentWeightingOnAFullSchedule(unittest.TestCase):
+    """What the blend does once every team has a real schedule.
+
+    Two teams that never meet, each with six games, sharing no opponent:
+
+      A goes 3-3 against a strong pool, each of whom beat six neutral teams.
+      B goes 4-2 against a weak pool, each of whom lost to those same six.
+
+    B has the better record; A played far better opposition.  Every team in
+    the fixture plays at least six games, and the strong and weak pools reach
+    the rest of the field through the same neutral teams, so the two pods are
+    structurally alike and differ only in opponent quality.
+    """
+
+    @staticmethod
+    def _games():
+        games = []
+        strong = [f"S{i}" for i in range(1, 7)]
+        weak = [f"W{i}" for i in range(1, 7)]
+        neutral = [f"N{i}" for i in range(1, 7)]
+        for n in neutral:
+            for s in strong:
+                games.append((s, n, 31, 10))      # strong beat the neutrals
+            for w in weak:
+                games.append((n, w, 31, 10))      # neutrals beat the weak
+        for i, s in enumerate(strong):            # A finishes 3-3
+            games.append(("A", s, 24, 17) if i < 3 else (s, "A", 24, 17))
+        for i, w in enumerate(weak):              # B finishes 4-2
+            games.append(("B", w, 24, 17) if i < 4 else (w, "B", 24, 17))
+        return games
+
+    def _ranker(self, weights):
+        r = make_ranker(*self._games())
+        r.BLEND_WEIGHTS = weights
+        return r
+
+    def _cliques(self, ranker):
+        import networkx as nx
+        g = nx.Graph()
+        g.add_nodes_from(ranker.teams)
+        for ta, tb in ranker._game_map:
+            g.add_edge(ta, tb)
+        return list(nx.find_cliques(g))
+
+    def test_every_team_has_a_real_schedule(self):
+        r = self._ranker((0.5, 0.5, 0.0))
+        for team in r.teams:
+            played = sum(r._overall_record(team)[:2])
+            self.assertGreaterEqual(played, 6, team)
+
+    def test_the_pair_is_decided_at_strength_zero(self):
+        """A and B share no opponent and no group, so nothing else applies."""
+        r = self._ranker((0.5, 0.5, 0.0))
+        shared, _ = r.common_opponents("A", "B")
+        self.assertEqual(shared, set())
+        _, strength = r._pairwise_compare("A", "B", self._cliques(r))
+        self.assertEqual(strength[0], 0)
+
+    def test_b_has_the_better_record(self):
+        r = self._ranker((1.0, 0.0, 0.0))
+        self.assertEqual(r._overall_record("A")[:2], (3, 3))
+        self.assertEqual(r._overall_record("B")[:2], (4, 2))
+
+    def test_record_only_favours_b(self):
+        r = self._ranker((1.0, 0.0, 0.0))
+        self.assertLess(r.blended_score("A"), r.blended_score("B"))
+        cmp, _ = r._pairwise_compare("A", "B", self._cliques(r))
+        self.assertEqual(cmp, 1)                  # B over A
+
+    def test_opponent_weighting_flips_the_verdict_to_a(self):
+        r = self._ranker((0.5, 0.5, 0.0))
+        self.assertGreater(r.blended_score("A"), r.blended_score("B"))
+        cmp, _ = r._pairwise_compare("A", "B", self._cliques(r))
+        self.assertEqual(cmp, -1)                 # A over B
+
+    def test_stronger_evidence_still_decides_the_final_order(self):
+        """The flipped verdict changes no rank, because chains outrank it.
+
+        B lost to two weak teams that six neutrals beat, and those neutrals
+        lost to the strong teams A split with.  Those 2-clique verdicts chain
+        A above B at strength 2, so the strength-0 verdict is locked only when
+        it agrees and discarded when it does not.  Schedule strength expresses
+        itself here without ever getting a vote.
+        """
+        ranks = {}
+        for weights in [(1.0, 0.0, 0.0), (0.5, 0.5, 0.0)]:
+            r = self._ranker(weights)
+            ranks[weights] = {x["team"]: x["rank"] for x in r.rank()}
+            self.assertLess(ranks[weights]["A"], ranks[weights]["B"], weights)
+        self.assertEqual(ranks[(1.0, 0.0, 0.0)], ranks[(0.5, 0.5, 0.0)])
 
 
 class TestTierHierarchyHolds(unittest.TestCase):

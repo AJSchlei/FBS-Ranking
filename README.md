@@ -409,8 +409,11 @@ What this changes on the 2025 regular season:
   go from 624 to 640 -- a 2.6% increase.  The large record inversions in the
   output (James Madison at 11-1 sitting below several 6-6 SEC teams) come from
   the group tiers and are unchanged by the blend.
-- A winless team can outrank a team with a win when its only game was against
-  a strong opponent.  `TestIndependentTeams` covers the smallest such case.
+- A team can finish above one with a better record when it played far better
+  opposition.  `TestOpponentWeightingOnAFullSchedule` builds the smallest
+  honest version of this: two teams with six games each and no shared
+  opponent, one 3-3 against a strong pool and one 4-2 against a weak one.
+  Record alone picks the 4-2 team; the blend picks the 3-3 team.
 
 **The blend can never reorder teams a group or common opponents settled.**
 Strength 0 is the last tier consulted, and ranked pairs locks stronger
@@ -581,7 +584,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-153 tests cover:
+158 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -616,6 +619,10 @@ of this file shows the latest result.
   nothing, unranked and twice-played shared opponents both counted, and two
   teams that met never reaching strength 1 at all (a shared opponent
   completes the triangle, so they are always in a group together)
+- The blend on a full schedule: six games per team, no shared opponents, and
+  the strength-0 verdict flipping from the better record to the better
+  opposition — while the final order does not move, because chained 2-clique
+  verdicts already separate the two and outrank anything the blend says
 - The blend: (1, 0, 0) reproducing the shrunk record, weights interpolating,
   an opponent's record excluding the team being scored, unranked opponents
   staying out of the averages, cached metrics recomputing when a game is added
