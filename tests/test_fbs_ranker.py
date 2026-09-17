@@ -262,6 +262,9 @@ class TestOverlappingGroups(unittest.TestCase):
             ("A", "E", 31, 28),
             ("B", "E", 24, 21),
         )
+        # Pinned to the record-only metric: this fixture is about the
+        # fallback's ordering, not about opponent weighting.
+        self.r.BLEND_WEIGHTS = (1.0, 0.0, 0.0)
         self.results = self.r.rank()
 
     def test_abcd_ranked_in_4_group(self):
@@ -301,10 +304,14 @@ class TestIndependentTeams(unittest.TestCase):
         X  (1.000 overall, +46 pd) — beats I1 directly
         I2 (1.000 overall, +14 pd) — beats Y directly; no shared clique with X,
                                        X ranks first via X's better point diff
+        I1 (0.000 overall, −21 pd) — its only game was to undefeated X, so the
+                                       opponent term of the blend lifts it
         Y  (0.333 overall)         — beats Z in trio; loses to I2 directly
-        I1 (0.000 overall, −21 pd) — tied with Z on win pct and point diff;
-                                       alphabetically 'I1' < 'Z' → I1 above Z
         Z  (0.000 overall, −21 pd)
+
+    No two of these teams share two opponents with differing results, so the
+    common-opponent tier never speaks here and the blend decides every pair
+    that no group settles.
     """
 
     def setUp(self):
@@ -333,9 +340,19 @@ class TestIndependentTeams(unittest.TestCase):
         """X beat I1 in their shared 2-clique → X ranks above I1."""
         self.assertLess(self.names.index("X"), self.names.index("I1"))
 
-    def test_y_above_i1(self):
-        """Y (0.333 overall) outranks I1 (0.000 overall) via fallback."""
-        self.assertLess(self.names.index("Y"), self.names.index("I1"))
+    def test_y_above_i1_on_record_alone(self):
+        """Weighted purely on record, Y (1-2) outranks I1 (0-1).
+
+        This fixture is deliberately pinned to record-only weights.  I1 has
+        played a single game, which is too little schedule for any opponent
+        weighting to mean anything; what this class tests is that teams
+        belonging to no shared group still get placed at all.  For what
+        opponent weighting actually does, see
+        TestOpponentWeightingOnAFullSchedule.
+        """
+        self.r.BLEND_WEIGHTS = (1.0, 0.0, 0.0)
+        names = ranked_names(self.r.rank())
+        self.assertLess(names.index("Y"), names.index("I1"))
 
 
 class TestCSVLoading(unittest.TestCase):
@@ -574,6 +591,10 @@ class TestConflictingVerdicts(unittest.TestCase):
 
     def test_verdict_strengths(self):
         """Each verdict reports the size of the group that decided it."""
+        # Record-only metric: this fixture exists to create a conflict between
+        # a 4-group, a 3-group and the fallback, and the blend would resolve
+        # A vs C the other way and dissolve the conflict being tested.
+        self.ranker.BLEND_WEIGHTS = (1.0, 0.0, 0.0)
         cliques = [["A", "B", "X1", "X2"], ["B", "C", "Y1"],
                    ["C", "Z1"], ["C", "Z2"]]
         cmp_ab, str_ab = self.ranker._pairwise_compare("A", "B", cliques)
@@ -661,6 +682,7 @@ class TestFallbackUsesShrunkRecord(unittest.TestCase):
 
     def test_raw_comparison_flips_the_result(self):
         """With PRIOR_GAMES back to 0, the old 2-0-over-7-1 ordering returns."""
+        self.ranker.BLEND_WEIGHTS = (1.0, 0.0, 0.0)
         self.ranker.PRIOR_GAMES = 0
         raw = ranked_names(self.ranker.rank())
         self.assertLess(raw.index("Q"), raw.index("P"))
@@ -1100,6 +1122,369 @@ class TestRankedColumnParsing(unittest.TestCase):
             self.assertFalse(_is_ranked(value), value)
         for value in ["true", "True", "1", "yes", "", None, "anything"]:
             self.assertTrue(_is_ranked(value), repr(value))
+
+
+# ---------------------------------------------------------------------------
+# Strength 1: common opponents
+# ---------------------------------------------------------------------------
+
+class TestCommonOpponentCounting(unittest.TestCase):
+    """common_opponents() separates shared opponents from informative ones.
+
+    A and B both play C, D and E.  They split on C and E (one won, one lost)
+    but both beat D, so D is shared without telling us anything.
+    """
+
+    def setUp(self):
+        self.r = make_ranker(
+            ("A", "C", 30, 10),   # A beats C
+            ("B", "C", 10, 30),   # B loses to C   -> differs
+            ("A", "D", 30, 10),   # both beat D    -> does not differ
+            ("B", "D", 28, 14),
+            ("A", "E", 10, 30),   # A loses to E
+            ("B", "E", 30, 10),   # B beats E      -> differs
+        )
+
+    def test_shared_counts_every_common_opponent(self):
+        shared, _ = self.r.common_opponents("A", "B")
+        self.assertEqual(shared, {"C", "D", "E"})
+
+    def test_differing_drops_the_agreeing_opponent(self):
+        _, differing = self.r.common_opponents("A", "B")
+        self.assertEqual(differing, {"C", "E"})
+
+    def test_symmetric(self):
+        self.assertEqual(self.r.common_opponents("A", "B"),
+                         self.r.common_opponents("B", "A"))
+
+
+class TestCommonOpponentThreshold(unittest.TestCase):
+    """The tier speaks only once MIN_DIFFERING_RESULTS results actually differ."""
+
+    def _pair_with(self, differing):
+        """A and B share three opponents, `differing` of which split them."""
+        games = []
+        for i, name in enumerate(("C", "D", "E")):
+            a_wins = True
+            b_wins = i >= differing      # first `differing` opponents split
+            games.append(("A", name, 30, 10) if a_wins else (name, "A", 30, 10))
+            games.append(("B", name, 30, 10) if b_wins else (name, "B", 30, 10))
+        return make_ranker(*games)
+
+    def test_one_differing_result_stays_silent(self):
+        r = self._pair_with(1)
+        _, differing = r.common_opponents("A", "B")
+        self.assertEqual(len(differing), 1)
+        self.assertIsNone(r._common_opponent_verdict("A", "B"))
+
+    def test_two_differing_results_issue_a_verdict(self):
+        r = self._pair_with(2)
+        _, differing = r.common_opponents("A", "B")
+        self.assertEqual(len(differing), 2)
+        self.assertIsNotNone(r._common_opponent_verdict("A", "B"))
+
+    def test_no_shared_opponents_stays_silent(self):
+        r = make_ranker(("A", "C", 30, 10), ("B", "D", 30, 10))
+        self.assertIsNone(r._common_opponent_verdict("A", "B"))
+
+    def test_zero_disables_the_tier_entirely(self):
+        r = self._pair_with(3)
+        r.MIN_DIFFERING_RESULTS = 0
+        self.assertIsNone(r._common_opponent_verdict("A", "B"))
+
+    def test_better_shared_record_ranks_higher(self):
+        r = self._pair_with(3)          # A beat all three, B lost to all three
+        cmp, _, _ = r._common_opponent_verdict("A", "B")
+        self.assertEqual(cmp, -1)
+        self.assertLess(ranked_names(r.rank()).index("A"),
+                        ranked_names(r.rank()).index("B"))
+
+    def test_level_shared_records_decide_nothing(self):
+        # A and B split their two shared opponents in opposite directions:
+        # both finish 1-1, so the tier has nothing to say.
+        r = make_ranker(
+            ("A", "C", 30, 10), (
+             "C", "B", 30, 10),
+            ("D", "A", 30, 10), ("B", "D", 30, 10),
+        )
+        _, differing = r.common_opponents("A", "B")
+        self.assertEqual(len(differing), 2)
+        self.assertIsNone(r._common_opponent_verdict("A", "B"))
+
+
+class TestCommonOpponentStrength(unittest.TestCase):
+    """Strength 1 sits below every group and above the blend."""
+
+    def _cliques(self, ranker):
+        import networkx as nx
+        g = nx.Graph()
+        g.add_nodes_from(ranker.teams)
+        for ta, tb in ranker._game_map:
+            g.add_edge(ta, tb)
+        return list(nx.find_cliques(g))
+
+    def test_verdict_strength_is_one(self):
+        r = make_ranker(
+            ("A", "C", 30, 10), ("C", "B", 30, 10),
+            ("A", "D", 30, 10), ("D", "B", 30, 10),
+        )
+        _, strength = r._pairwise_compare("A", "B", self._cliques(r))
+        self.assertEqual(strength[0], 1)
+
+    def test_teams_that_met_can_never_reach_strength_one(self):
+        """Playing each other plus any shared opponent IS a round-robin group.
+
+        A shared opponent C completes the triangle A-B-C, so two teams that
+        met are always in a group together whenever they have a common
+        opponent at all.  The common-opponent tier is therefore structurally
+        reachable only by teams that never played.
+        """
+        r = make_ranker(
+            ("B", "A", 21, 17),                       # B beats A directly
+            ("A", "C", 30, 10), ("C", "B", 30, 10),
+            ("A", "D", 30, 10), ("D", "B", 30, 10),
+        )
+        self.assertTrue(any({"A", "B"} <= set(c) for c in self._cliques(r)))
+        _, strength = r._pairwise_compare("A", "B", self._cliques(r))
+        self.assertGreaterEqual(strength[0], 3)
+
+    def test_common_opponents_outrank_the_blend(self):
+        """A has the worse blended score but the better shared record.
+
+        A and B never meet.  Both played C and D: A beat each, B lost to
+        each.  A then loses three games to teams outside, leaving it with the
+        worse blend — but the shared results are strength 1 and decide first.
+        """
+        r = make_ranker(
+            ("A", "C", 30, 10), ("C", "B", 30, 10),
+            ("A", "D", 30, 10), ("D", "B", 30, 10),
+            ("E", "A", 30, 10), ("F", "A", 30, 10), ("G", "A", 30, 10),
+            ("B", "H", 30, 10), ("B", "I", 30, 10), ("B", "J", 30, 10),
+        )
+        self.assertEqual(r._common_opponent_verdict("A", "B")[0], -1)
+        self.assertLess(r.blended_score("A"), r.blended_score("B"))
+        names = ranked_names(r.rank())
+        self.assertLess(names.index("A"), names.index("B"))
+
+
+class TestUnrankedCommonOpponents(unittest.TestCase):
+    """An FCS opponent both teams played still counts as a common opponent."""
+
+    def setUp(self):
+        self.r = FBSRoundRobinRanker()
+        self.r.add_game("A", "Tarleton State", 30, 10, away_ranked=False)
+        self.r.add_game("Tarleton State", "B", 30, 10, home_ranked=False)
+        self.r.add_game("A", "Austin Peay", 30, 10, away_ranked=False)
+        self.r.add_game("Austin Peay", "B", 30, 10, home_ranked=False)
+
+    def test_unranked_opponents_are_shared(self):
+        shared, differing = self.r.common_opponents("A", "B")
+        self.assertEqual(shared, {"Tarleton State", "Austin Peay"})
+        self.assertEqual(differing, shared)
+
+    def test_they_produce_a_verdict(self):
+        cmp, _, _ = self.r._common_opponent_verdict("A", "B")
+        self.assertEqual(cmp, -1)
+
+    def test_they_are_still_not_ranked(self):
+        self.assertEqual(ranked_names(self.r.rank()), ["A", "B"])
+
+
+class TestCommonOpponentsCountEveryMeeting(unittest.TestCase):
+    """A shared opponent played twice contributes both games."""
+
+    def test_season_series_against_a_shared_opponent(self):
+        r = make_ranker(
+            ("A", "C", 30, 10), ("C", "A", 30, 10),   # A splits with C
+            ("C", "B", 30, 10), ("C", "B", 28, 14),   # B loses to C twice
+            ("A", "D", 30, 10), ("D", "B", 30, 10),
+        )
+        self.assertEqual(r._record_against("A", {"C"})[:2], (1, 1))
+        self.assertEqual(r._record_against("B", {"C"})[:2], (0, 2))
+
+
+# ---------------------------------------------------------------------------
+# Strength 0: the opponent-weighted blend
+# ---------------------------------------------------------------------------
+
+class TestBlendedScore(unittest.TestCase):
+    """blended_score() combines a team's record with its opponents'."""
+
+    def setUp(self):
+        # A beats B; B beats C and D.  A's one opponent is 2-1 excluding A.
+        self.r = make_ranker(
+            ("A", "B", 30, 10),
+            ("B", "C", 30, 10),
+            ("B", "D", 30, 10),
+        )
+
+    def test_record_only_weights_reproduce_the_shrunk_record(self):
+        self.r.BLEND_WEIGHTS = (1.0, 0.0, 0.0)
+        for team in self.r.teams:
+            w, l = self.r._overall_record(team)[:2]
+            self.assertAlmostEqual(self.r.blended_score(team),
+                                   self.r._shrunk_win_pct(w, l))
+
+    def test_opponent_record_excludes_the_team_being_scored(self):
+        """A's OWP is B's record with the A game removed: 2-0, not 2-1."""
+        m = self.r._metrics()
+        self.assertAlmostEqual(m["owp"]["A"], self.r._shrunk_win_pct(2, 0))
+
+    def test_weights_interpolate(self):
+        m = self.r._metrics()
+        self.r.BLEND_WEIGHTS = (0.5, 0.5, 0.0)
+        self.assertAlmostEqual(self.r.blended_score("A"),
+                               0.5 * m["wp"]["A"] + 0.5 * m["owp"]["A"])
+
+    def test_third_weight_uses_opponents_opponents(self):
+        m = self.r._metrics()
+        self.r.BLEND_WEIGHTS = (0.0, 0.0, 1.0)
+        self.assertAlmostEqual(self.r.blended_score("A"), m["oowp"]["A"])
+
+    def test_unranked_opponents_stay_out_of_the_averages(self):
+        r = FBSRoundRobinRanker()
+        r.add_game("A", "B", 30, 10)
+        r.add_game("A", "Bryant", 10, 30, away_ranked=False)
+        m = r._metrics()
+        # OWP averages over B alone; Bryant has no record to contribute.
+        self.assertAlmostEqual(m["owp"]["A"], r._shrunk_win_pct(0, 0))
+        # The loss still counts against A's own record.
+        self.assertEqual(r._overall_record("A")[:2], (1, 1))
+
+
+class TestMetricsCacheInvalidation(unittest.TestCase):
+    """Cached metrics must not outlive the inputs they were computed from."""
+
+    def test_adding_a_game_recomputes(self):
+        r = make_ranker(("A", "B", 30, 10))
+        before = r.blended_score("A")
+        r.add_game("A", "C", 10, 30)
+        self.assertNotAlmostEqual(before, r.blended_score("A"))
+
+    def test_adding_an_unranked_game_recomputes(self):
+        r = make_ranker(("A", "B", 30, 10))
+        before = r.blended_score("A")
+        r.add_game("A", "Bryant", 10, 30, away_ranked=False)
+        self.assertNotAlmostEqual(before, r.blended_score("A"))
+
+    def test_changing_the_prior_recomputes(self):
+        r = make_ranker(("A", "B", 30, 10))
+        before = r.blended_score("A")
+        r.PRIOR_GAMES = 0
+        self.assertNotAlmostEqual(before, r.blended_score("A"))
+
+
+class TestOpponentWeightingOnAFullSchedule(unittest.TestCase):
+    """What the blend does once every team has a real schedule.
+
+    Two teams that never meet, each with six games, sharing no opponent:
+
+      A goes 3-3 against a strong pool, each of whom beat six neutral teams.
+      B goes 4-2 against a weak pool, each of whom lost to those same six.
+
+    B has the better record; A played far better opposition.  Every team in
+    the fixture plays at least six games, and the strong and weak pools reach
+    the rest of the field through the same neutral teams, so the two pods are
+    structurally alike and differ only in opponent quality.
+    """
+
+    @staticmethod
+    def _games():
+        games = []
+        strong = [f"S{i}" for i in range(1, 7)]
+        weak = [f"W{i}" for i in range(1, 7)]
+        neutral = [f"N{i}" for i in range(1, 7)]
+        for n in neutral:
+            for s in strong:
+                games.append((s, n, 31, 10))      # strong beat the neutrals
+            for w in weak:
+                games.append((n, w, 31, 10))      # neutrals beat the weak
+        for i, s in enumerate(strong):            # A finishes 3-3
+            games.append(("A", s, 24, 17) if i < 3 else (s, "A", 24, 17))
+        for i, w in enumerate(weak):              # B finishes 4-2
+            games.append(("B", w, 24, 17) if i < 4 else (w, "B", 24, 17))
+        return games
+
+    def _ranker(self, weights):
+        r = make_ranker(*self._games())
+        r.BLEND_WEIGHTS = weights
+        return r
+
+    def _cliques(self, ranker):
+        import networkx as nx
+        g = nx.Graph()
+        g.add_nodes_from(ranker.teams)
+        for ta, tb in ranker._game_map:
+            g.add_edge(ta, tb)
+        return list(nx.find_cliques(g))
+
+    def test_every_team_has_a_real_schedule(self):
+        r = self._ranker((0.5, 0.5, 0.0))
+        for team in r.teams:
+            played = sum(r._overall_record(team)[:2])
+            self.assertGreaterEqual(played, 6, team)
+
+    def test_the_pair_is_decided_at_strength_zero(self):
+        """A and B share no opponent and no group, so nothing else applies."""
+        r = self._ranker((0.5, 0.5, 0.0))
+        shared, _ = r.common_opponents("A", "B")
+        self.assertEqual(shared, set())
+        _, strength = r._pairwise_compare("A", "B", self._cliques(r))
+        self.assertEqual(strength[0], 0)
+
+    def test_b_has_the_better_record(self):
+        r = self._ranker((1.0, 0.0, 0.0))
+        self.assertEqual(r._overall_record("A")[:2], (3, 3))
+        self.assertEqual(r._overall_record("B")[:2], (4, 2))
+
+    def test_record_only_favours_b(self):
+        r = self._ranker((1.0, 0.0, 0.0))
+        self.assertLess(r.blended_score("A"), r.blended_score("B"))
+        cmp, _ = r._pairwise_compare("A", "B", self._cliques(r))
+        self.assertEqual(cmp, 1)                  # B over A
+
+    def test_opponent_weighting_flips_the_verdict_to_a(self):
+        r = self._ranker((0.5, 0.5, 0.0))
+        self.assertGreater(r.blended_score("A"), r.blended_score("B"))
+        cmp, _ = r._pairwise_compare("A", "B", self._cliques(r))
+        self.assertEqual(cmp, -1)                 # A over B
+
+    def test_stronger_evidence_still_decides_the_final_order(self):
+        """The flipped verdict changes no rank, because chains outrank it.
+
+        B lost to two weak teams that six neutrals beat, and those neutrals
+        lost to the strong teams A split with.  Those 2-clique verdicts chain
+        A above B at strength 2, so the strength-0 verdict is locked only when
+        it agrees and discarded when it does not.  Schedule strength expresses
+        itself here without ever getting a vote.
+        """
+        ranks = {}
+        for weights in [(1.0, 0.0, 0.0), (0.5, 0.5, 0.0)]:
+            r = self._ranker(weights)
+            ranks[weights] = {x["team"]: x["rank"] for x in r.rank()}
+            self.assertLess(ranks[weights]["A"], ranks[weights]["B"], weights)
+        self.assertEqual(ranks[(1.0, 0.0, 0.0)], ranks[(0.5, 0.5, 0.0)])
+
+
+class TestTierHierarchyHolds(unittest.TestCase):
+    """The blend can never reorder teams a group or shared opponents settled."""
+
+    def setUp(self):
+        self.games = [
+            # 3-team group: G1 beats G2 beats G3.
+            ("G1", "G2", 30, 10), ("G1", "G3", 30, 10), ("G2", "G3", 30, 10),
+            # G3 then feasts on weak teams outside the group.
+            ("G3", "W1", 50, 0), ("G3", "W2", 50, 0), ("G3", "W3", 50, 0),
+        ]
+
+    def test_group_order_survives_every_weighting(self):
+        for weights in [(1.0, 0.0, 0.0), (0.5, 0.5, 0.0), (0.0, 1.0, 0.0),
+                        (0.0, 0.0, 1.0), (0.34, 0.33, 0.33)]:
+            r = make_ranker(*self.games)
+            r.BLEND_WEIGHTS = weights
+            names = ranked_names(r.rank())
+            self.assertLess(names.index("G1"), names.index("G2"), weights)
+            self.assertLess(names.index("G2"), names.index("G3"), weights)
 
 
 if __name__ == "__main__":
