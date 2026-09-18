@@ -443,6 +443,20 @@ class FBSRoundRobinRanker:
             out[other] = (w + 1, l) if pf > pa else (w, l + 1)
         return out
 
+    def teams_without_ranked_opponents(self) -> set:
+        """Ranked teams whose entire schedule was unranked opponents.
+
+        Such a team is in the rankings but connected to nothing in them: it can
+        share no round-robin group, and its position rests on however few games
+        it played.  In real data this almost always means the input is wrong —
+        a team that does not belong in the ranked pool was marked as if it did.
+        """
+        played = set()
+        for team_a, team_b in self._game_map:
+            played.add(team_a)
+            played.add(team_b)
+        return self.teams - played
+
     def _record_against(self, team: str, opponent_names) -> tuple:
         """(wins, losses, points_for, points_against) versus a set of opponents.
 
@@ -1065,6 +1079,15 @@ CSV input format:
               f"unranked on some games and ranked on others. Treating them as "
               f"unranked throughout, since a blank classification field also "
               f"reads as ranked:\n  {names}")
+
+    stranded = ranker.teams_without_ranked_opponents()
+    if stranded:
+        names = ", ".join(sorted(stranded))
+        print(f"\nNote: {len(stranded)} ranked team(s) played no ranked "
+              f"opponent at all, so nothing in the rankings is connected to "
+              f"them:\n  {names}\n"
+              f"  If these do not belong in the rankings, the input marked "
+              f"them as if they did.")
 
     results = ranker.rank()
     print_rankings(results)

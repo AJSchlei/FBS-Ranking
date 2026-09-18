@@ -7,7 +7,7 @@ CollegeFootballData responses.
 
 Coverage:
   - camelCase and snake_case field names both understood
-  - unplayed, cancelled and non-FBS games dropped
+  - unplayed, cancelled, non-FBS and unclassified games dropped
   - rematches detected regardless of home/away order
   - keep_first / keep_last policies
   - the CSV it writes loads into FBSRoundRobinRanker
@@ -84,12 +84,26 @@ class TestExtractFbsGames(unittest.TestCase):
         self.assertEqual(rows, [])
         self.assertEqual(skipped["no_fbs_side"], 1)
 
-    def test_keeps_games_with_unknown_classification(self):
-        """A missing classification is not evidence the opponent is not FBS."""
+    def test_drops_games_with_no_classification(self):
+        """A missing classification is not evidence the team IS FBS, either.
+
+        This reverses an earlier assumption.  CFBD labels the FBS and FCS
+        teams it tracks, so the records with nothing in that field belong to
+        opponents further down — NAIA and Division II schools appearing as the
+        visitor on an FCS schedule.  Treating a blank as FBS put six of them
+        into the 2025 rankings.
+
+        The cost of the stricter rule is that a response with no
+        classification fields at all yields no games rather than all of them.
+        That is the safer failure: an empty output says plainly that something
+        is wrong, where the old one quietly ranked whoever showed up.  main()
+        detects it and says so.
+        """
         raw = [{"homeTeam": "Texas", "homePoints": 31,
                 "awayTeam": "Oklahoma", "awayPoints": 24}]
-        rows, _ = fetch_games.extract_fbs_games(raw)
-        self.assertEqual(len(rows), 1)
+        rows, skipped = fetch_games.extract_fbs_games(raw)
+        self.assertEqual(rows, [])
+        self.assertEqual(skipped["unclassified"], 1)
 
     def test_drops_records_missing_team_names(self):
         raw = [{"homePoints": 31, "awayPoints": 24}]
@@ -320,6 +334,71 @@ class TestApiLayer(unittest.TestCase):
         ranker = FBSRoundRobinRanker()
         ranker.load_csv(out)          # must not raise
         self.assertEqual(len(ranker._game_map), 1)
+
+
+class TestClassificationMustBeExplicit(unittest.TestCase):
+    """Only an explicit "fbs" counts as FBS.
+
+    CFBD labels the FBS and FCS teams it tracks, so a blank classification
+    belongs to something further down — an NAIA or Division II visitor on an
+    FCS schedule.  Reading a blank as FBS put six such schools into the 2025
+    rankings, each 1-0 with no group and no points.
+    """
+
+    FBS_GAME = {"homeTeam": "Indiana", "awayTeam": "Purdue",
+                "homePoints": 30, "awayPoints": 10,
+                "homeClassification": "fbs", "awayClassification": "fbs",
+                "startDate": "2025-11-29"}
+    FCS_GAME = {"homeTeam": "Army", "awayTeam": "Tarleton State",
+                "homePoints": 20, "awayPoints": 27,
+                "homeClassification": "fbs", "awayClassification": "fcs",
+                "startDate": "2025-08-30"}
+    NAIA_GAME = {"homeTeam": "North Dakota State", "awayTeam": "Dakota State",
+                 "homePoints": 10, "awayPoints": 30,
+                 "homeClassification": "fcs", "awayClassification": None,
+                 "startDate": "2025-08-30"}
+
+    def test_fbs_versus_fbs_is_kept(self):
+        rows, _ = fetch_games.extract_fbs_games([self.FBS_GAME])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["home_ranked"], "true")
+        self.assertEqual(rows[0]["away_ranked"], "true")
+
+    def test_fbs_versus_fcs_keeps_the_game_and_marks_the_fcs_side(self):
+        rows, _ = fetch_games.extract_fbs_games([self.FCS_GAME])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["home_ranked"], "true")
+        self.assertEqual(rows[0]["away_ranked"], "false")
+
+    def test_an_unclassified_team_is_not_treated_as_fbs(self):
+        rows, skipped = fetch_games.extract_fbs_games([self.NAIA_GAME])
+        self.assertEqual(rows, [])
+        self.assertEqual(skipped["unclassified"], 1)
+
+    def test_both_sides_unclassified_is_dropped(self):
+        game = dict(self.NAIA_GAME, homeClassification=None)
+        rows, skipped = fetch_games.extract_fbs_games([game])
+        self.assertEqual(rows, [])
+        self.assertEqual(skipped["unclassified"], 1)
+
+    def test_an_explicit_non_fbs_pair_is_counted_separately(self):
+        game = dict(self.NAIA_GAME, awayClassification="ii")
+        rows, skipped = fetch_games.extract_fbs_games([game])
+        self.assertEqual(rows, [])
+        self.assertEqual(skipped["no_fbs_side"], 1)
+        self.assertEqual(skipped["unclassified"], 0)
+
+    def test_classification_matching_ignores_case_and_padding(self):
+        game = dict(self.FBS_GAME, homeClassification=" FBS ")
+        rows, _ = fetch_games.extract_fbs_games([game])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["home_ranked"], "true")
+
+    def test_a_mixed_season_keeps_only_what_it_should(self):
+        rows, skipped = fetch_games.extract_fbs_games(
+            [self.FBS_GAME, self.FCS_GAME, self.NAIA_GAME])
+        self.assertEqual([r["home_team"] for r in rows], ["Indiana", "Army"])
+        self.assertEqual(skipped["unclassified"], 1)
 
 
 if __name__ == "__main__":

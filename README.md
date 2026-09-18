@@ -217,6 +217,21 @@ In a CSV the optional `home_ranked` / `away_ranked` columns carry the same
 information — `false`, `0`, `no`, `n` or `unranked` mean unranked; anything
 else, including a missing column, means ranked.  `fetch_games.py` writes them.
 
+**Only an explicit `fbs` classification counts as FBS.**  `fetch_games.py` used
+to treat a *missing* classification as FBS, on the reasoning that a blank is
+not evidence a team is non-FBS.  That was backwards.  CFBD labels the FBS and
+FCS teams it tracks, so the records with nothing in that field belong to
+opponents further down — NAIA and Division II schools that appear as the
+visitor on an FCS schedule.  Reading a blank as FBS let six of them into the
+2025 rankings (Dakota State, Valley City State, Madonna, Webber International,
+Eastern Oregon, Wayland Baptist), each sitting in the 50s and 60s on a 1-0
+record with no group and no points, having beaten an FCS team that *was*
+correctly marked unranked.
+
+If an FBS team ever ends up with no ranked opponent at all, the CLI says so by
+name.  That is always a sign the input marked someone as ranked who should not
+have been.
+
 **A team marked unranked in any row is treated as unranked in every row.**  The
 two markings are not equally trustworthy: `false` is positive evidence that a
 team sits outside the ranked division, while `true` is also what a blank or
@@ -631,7 +646,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-168 tests cover:
+179 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -679,9 +694,15 @@ of this file shows the latest result.
   an opponent's record excluding the team being scored, unranked opponents
   staying out of the averages, cached metrics recomputing when a game is added
   or PRIOR_GAMES changes, and group order surviving all five weightings tried
+- Teams whose entire schedule was unranked opponents being reported, and still
+  ranked rather than silently dropped
 - `fetch_games.py`: both of CFBD's field-naming styles, unplayed and non-FBS
   games dropped, rematches found despite reversed sides, and the CSV it writes
   loading into the ranker (the API layer runs against a stub, never the network)
+- `fetch_games.py` classification: only an explicit `fbs` counting as FBS, an
+  unclassified team not slipping through as one, case and padding ignored, and
+  a response with no classification fields at all failing loudly rather than
+  keeping everything
 - Ranking is always a strict total order (no cycles survive)
 - Determinism across input orderings
 - CSV loading (with and without a `date` column)

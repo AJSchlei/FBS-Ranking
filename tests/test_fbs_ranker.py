@@ -1539,6 +1539,35 @@ class TestInconsistentRankedMarking(unittest.TestCase):
         self.assertIn("line 3", str(ctx.exception))
 
 
+class TestTeamsWithoutRankedOpponents(unittest.TestCase):
+    """A ranked team connected to nothing in the rankings is reported."""
+
+    def test_a_team_with_only_unranked_opponents_is_flagged(self):
+        r = FBSRoundRobinRanker()
+        r.add_game("Army", "Navy", 31, 14)
+        r.add_game("Dakota State", "North Dakota State", 30, 10,
+                   away_ranked=False)
+        self.assertEqual(r.teams_without_ranked_opponents(), {"Dakota State"})
+
+    def test_a_fully_connected_field_flags_nobody(self):
+        r = make_ranker(("Army", "Navy", 31, 14), ("Navy", "Air Force", 28, 21))
+        self.assertEqual(r.teams_without_ranked_opponents(), set())
+
+    def test_a_team_with_one_ranked_opponent_is_not_flagged(self):
+        r = FBSRoundRobinRanker()
+        r.add_game("Army", "Navy", 31, 14)
+        r.add_game("Army", "Tarleton State", 20, 27, away_ranked=False)
+        self.assertEqual(r.teams_without_ranked_opponents(), set())
+
+    def test_flagged_teams_are_still_ranked(self):
+        """This reports a data problem; it does not silently drop anyone."""
+        r = FBSRoundRobinRanker()
+        r.add_game("Army", "Navy", 31, 14)
+        r.add_game("Dakota State", "North Dakota State", 30, 10,
+                   away_ranked=False)
+        self.assertIn("Dakota State", ranked_names(r.rank()))
+
+
 class TestDefaultWeights(unittest.TestCase):
     """The shipped defaults are a deliberate choice, so pin them."""
 
