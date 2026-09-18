@@ -443,21 +443,35 @@ separates teams:
 | (.60, .30, .10) | .1072 | .0147 | .0027 | 6.2 : 1 |
 | (.50, .50, 0) | .0894 | .0245 | -- | 3.7 : 1 |
 
-Measured on the 2025 regular season against the plain shrunk record:
+Measured against the plain shrunk record on two seasons:
 
-| | teams moved | median shift | max shift | record inversions |
-|---|---|---|---|---|
-| record only | -- | -- | -- | 626 |
-| **(.75, .25, 0)** | 40 of 136 | 1 | 9 | **624** |
-| (.60, .30, .10) | 69 of 136 | 1 | 17 | 628 |
-| (.50, .50, 0) | 94 of 136 | 1 | 22 | 640 |
+| season | weights | teams moved | median shift | max shift | inversions |
+|---|---|---|---|---|---|
+| 2024 | record only | -- | -- | -- | 631 |
+| 2024 | **(.75, .25, 0)** | 47 of 134 | 2 | 17 | 635 (+0.6%) |
+| 2024 | (.60, .30, .10) | 63 of 134 | 2 | 18 | 638 (+1.1%) |
+| 2024 | (.50, .50, 0) | 95 of 134 | 2 | 42 | 669 (+6.0%) |
+| 2025 | record only | -- | -- | -- | 626 |
+| 2025 | **(.75, .25, 0)** | 40 of 136 | 1 | 9 | 624 (-0.3%) |
+| 2025 | (.60, .30, .10) | 69 of 136 | 1 | 17 | 628 (+0.3%) |
+| 2025 | (.50, .50, 0) | 94 of 136 | 1 | 22 | 640 (+2.2%) |
 
 "Record inversions" counts pairs where the lower-ranked team has a win
-percentage at least .150 better.  The default is the only weighting tried that
-*reduces* them.  It lifts Georgia to 3rd and BYU to 5th while moving nothing in
-the top 15 by more than two places.
+percentage at least .150 better.  Some are legitimate — a group verdict
+outranking a record is the system working — so what matters is how the count
+*moves*.
 
-Two notes from that table:
+The default stays within a percent of the baseline in both seasons, where an
+even split adds 2% to 6%.  It is the most conservative option that still gives
+schedule strength a voice, and 2025 alone would have oversold it: there it
+slightly *reduced* inversions, which looked like a point in its favour until
+2024 showed that was a one-season accident rather than a property.
+
+2024 is the more demanding season generally — 873 games to 2025's 755, and
+every weighting moves teams further — so treat the 2025 figures as the
+optimistic end of the range.
+
+Two notes from these tables:
 
 - **An even split is a large change, not a moderate one.**  It moves 94 of 136
   teams, puts LSU (6-5) above Missouri and Tennessee (both 7-4) on the strength
@@ -471,6 +485,13 @@ Two notes from that table:
 
 The large record inversions that remain (James Madison at 11-1 sitting below
 several 6-6 SEC teams) come from the group tiers and no weighting touches them.
+
+`compare_weights.py` produces these tables for any season:
+
+```bash
+python compare_weights.py games_2024.csv
+python compare_weights.py games_2024.csv --weights 0.8,0.2,0 0.6,0.4,0 --top 40
+```
 
 `TestOpponentWeightingOnAFullSchedule` covers the behaviour in isolation: two
 teams with six games each and no shared opponent, one 3-3 against a strong pool
@@ -646,7 +667,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-179 tests cover:
+199 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -699,6 +720,10 @@ of this file shows the latest result.
 - `fetch_games.py`: both of CFBD's field-naming styles, unplayed and non-FBS
   games dropped, rematches found despite reversed sides, and the CSV it writes
   loading into the ranker (the API layer runs against a stub, never the network)
+- `compare_weights.py`: movement between orderings, record inversions at a
+  given margin (including a winless team not dividing by zero), the influence
+  figures, an undifferentiated field yielding no ratio rather than a huge one,
+  and the CLI rejecting malformed weights
 - `fetch_games.py` classification: only an explicit `fbs` counting as FBS, an
   unclassified team not slipping through as one, case and padding ignored, and
   a response with no classification fields at all failing loudly rather than
