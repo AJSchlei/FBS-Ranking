@@ -1466,6 +1466,22 @@ class TestOpponentWeightingOnAFullSchedule(unittest.TestCase):
         self.assertEqual(ranks[(1.0, 0.0, 0.0)], ranks[(0.5, 0.5, 0.0)])
 
 
+class TestDefaultWeights(unittest.TestCase):
+    """The shipped defaults are a deliberate choice, so pin them."""
+
+    def test_blend_weights(self):
+        self.assertEqual(FBSRoundRobinRanker.BLEND_WEIGHTS, (0.75, 0.25, 0.0))
+
+    def test_weights_sum_to_one(self):
+        self.assertAlmostEqual(sum(FBSRoundRobinRanker.BLEND_WEIGHTS), 1.0)
+
+    def test_min_differing_results(self):
+        self.assertEqual(FBSRoundRobinRanker.MIN_DIFFERING_RESULTS, 2)
+
+    def test_prior_games(self):
+        self.assertEqual(FBSRoundRobinRanker.PRIOR_GAMES, 4.0)
+
+
 class TestTierHierarchyHolds(unittest.TestCase):
     """The blend can never reorder teams a group or shared opponents settled."""
 

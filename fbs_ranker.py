@@ -116,8 +116,17 @@ class FBSRoundRobinRanker:
 
     # Weights for the strength-0 metric, as (own record, opponents' records,
     # opponents' opponents' records); they should sum to 1.  (1, 0, 0) is the
-    # plain shrunk record.  The default splits own record and opponents evenly.
-    BLEND_WEIGHTS = (0.5, 0.5, 0.0)
+    # plain shrunk record.
+    #
+    # The default gives opponents a quarter weight.  Nominal weight overstates
+    # a term's influence, because the three metrics do not vary equally: across
+    # the 2025 field own record spans .133-.875 while opponents' records span
+    # only .383-.617, each averaging layer pulling harder toward .500.  Weight
+    # times spread is what actually decides, and at (.75, .25, 0) own record
+    # outweighs opponents about 11 to 1.  An even split makes it 3.7 to 1,
+    # which moves 94 of 136 teams and drops App State 22 places on the strength
+    # of three bad opponents.
+    BLEND_WEIGHTS = (0.75, 0.25, 0.0)
 
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a
