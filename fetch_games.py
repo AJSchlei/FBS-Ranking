@@ -92,9 +92,18 @@ def extract_fbs_games(raw_games):
     Keeps every completed game with at least one FBS side, marking any non-FBS
     opponent unranked.  Returns (rows, skipped) where skipped counts why
     records were dropped.
+
+    A side counts as FBS only when the API says so explicitly.  A blank or
+    absent classification is not a quiet "probably FBS": CFBD labels the FBS
+    and FCS teams it tracks, so the records with nothing in that field are the
+    ones for opponents further down — NAIA and Division II schools that turn up
+    as the visiting team on an FCS schedule.  Reading a blank as FBS let those
+    into the rankings on a single game apiece, sitting in the 50s and 60s on a
+    1-0 record with no group and no points.
     """
     rows = []
-    skipped = {"not_final": 0, "no_fbs_side": 0, "missing_fields": 0}
+    skipped = {"not_final": 0, "no_fbs_side": 0, "missing_fields": 0,
+               "unclassified": 0}
 
     for game in raw_games:
         home = _first(game, "homeTeam", "home_team")
@@ -112,12 +121,14 @@ def extract_fbs_games(raw_games):
 
         home_div = _first(game, "homeClassification", "home_classification")
         away_div = _first(game, "awayClassification", "away_classification")
-        # A missing classification is not evidence the team is non-FBS, so
-        # treat only an explicit non-fbs value as unranked.
-        home_ranked = not (home_div and home_div != "fbs")
-        away_ranked = not (away_div and away_div != "fbs")
+        # Only an explicit "fbs" counts.  See the note in the docstring.
+        home_ranked = str(home_div).strip().lower() == "fbs" if home_div else False
+        away_ranked = str(away_div).strip().lower() == "fbs" if away_div else False
         if not home_ranked and not away_ranked:
-            skipped["no_fbs_side"] += 1
+            if not home_div or not away_div:
+                skipped["unclassified"] += 1
+            else:
+                skipped["no_fbs_side"] += 1
             continue
 
         start = _first(game, "startDate", "start_date") or ""
@@ -236,7 +247,21 @@ def main(argv=None):
           f"({len(rows) - unranked} FBS-vs-FBS, {unranked} vs an unranked opponent)")
     print(f"  skipped: {skipped['not_final']} not final, "
           f"{skipped['no_fbs_side']} with no FBS side, "
-          f"{skipped['missing_fields']} missing fields")
+          f"{skipped['unclassified']} with no FBS side and an unclassified "
+          f"team, {skipped['missing_fields']} missing fields")
+
+    if not rows and skipped["unclassified"]:
+        print(f"\nNothing was kept: all {skipped['unclassified']} games were "
+              f"dropped because neither side was explicitly classified 'fbs'."
+              f"\nThe API response is missing its classification fields, so "
+              f"there is no way to tell\nFBS teams from the rest. Nothing was "
+              f"written.", file=sys.stderr)
+        sys.exit(1)
+
+    if not unranked:
+        print("\n  WARNING: no games against an unranked opponent were found. "
+              "\n  A full FBS season always has some, so the classification "
+              "\n  fields may be missing from this response.", file=sys.stderr)
 
     upsets = find_unranked_upsets(rows)
     if upsets:

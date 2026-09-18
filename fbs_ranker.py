@@ -116,8 +116,17 @@ class FBSRoundRobinRanker:
 
     # Weights for the strength-0 metric, as (own record, opponents' records,
     # opponents' opponents' records); they should sum to 1.  (1, 0, 0) is the
-    # plain shrunk record.  The default splits own record and opponents evenly.
-    BLEND_WEIGHTS = (0.5, 0.5, 0.0)
+    # plain shrunk record.
+    #
+    # The default gives opponents a quarter weight.  Nominal weight overstates
+    # a term's influence, because the three metrics do not vary equally: across
+    # the 2025 field own record spans .133-.875 while opponents' records span
+    # only .383-.617, each averaging layer pulling harder toward .500.  Weight
+    # times spread is what actually decides, and at (.75, .25, 0) own record
+    # outweighs opponents about 11 to 1.  An even split makes it 3.7 to 1,
+    # which moves 94 of 136 teams and drops App State 22 places on the strength
+    # of three bad opponents.
+    BLEND_WEIGHTS = (0.75, 0.25, 0.0)
 
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a
@@ -143,6 +152,10 @@ class FBSRoundRobinRanker:
         self._metrics_cache = None
         #: Names of every unranked opponent seen, for reporting.
         self.unranked_opponents: set = set()
+        #: Opponents some rows marked ranked and others unranked, which
+        #: load_csv resolved as unranked.  Usually a sign that the source
+        #: data left a classification field blank on some games.
+        self.demoted_opponents: set = set()
         # Canonical key: (team_a, team_b) with team_a < team_b (lexicographic).
         # Value: list of (score_for_team_a, score_for_team_b), in the order the
         # games were added.  A pair that met twice — a conference championship
@@ -162,6 +175,16 @@ class FBSRoundRobinRanker:
         not be ranked (see add_game).  Accepted values are false/0/no/n for
         unranked; anything else, including a missing column, means ranked.
 
+        A team marked unranked in ANY row is treated as unranked in EVERY row.
+        The two markings are not equally trustworthy: "unranked" is positive
+        evidence that a team is outside the ranked division, while "ranked" is
+        also what a missing or absent value defaults to.  Taking each row at
+        face value lets one row with a blank classification field promote an
+        FCS team into the rankings on a fraction of its schedule -- which puts
+        it near the top, since the games it lost are the ones that named it
+        correctly.  Teams corrected this way are listed in
+        `demoted_opponents`.
+
         Raises:
             DuplicateGameError: if two rows describe the same pair of teams and
                 on_duplicate is "error".  The message names the offending line
@@ -169,19 +192,34 @@ class FBSRoundRobinRanker:
         """
         with open(filepath, newline="", encoding="utf-8") as fh:
             reader = csv.DictReader(fh)
-            for row in reader:
-                home = row["home_team"].strip()
-                away = row["away_team"].strip()
-                home_score = int(row["home_score"])
-                away_score = int(row["away_score"])
-                try:
-                    self.add_game(home, away, home_score, away_score,
-                                  home_ranked=_is_ranked(row.get("home_ranked")),
-                                  away_ranked=_is_ranked(row.get("away_ranked")))
-                except DuplicateGameError as exc:
-                    raise DuplicateGameError(
-                        f"{filepath} line {reader.line_num}: {exc}"
-                    ) from None
+            rows = [(reader.line_num, row) for row in reader]
+
+        # First pass: anyone ever marked unranked is unranked throughout.
+        unranked = set()
+        marked_ranked = set()
+        for _, row in rows:
+            for side in ("home", "away"):
+                team = row[f"{side}_team"].strip()
+                if _is_ranked(row.get(f"{side}_ranked")):
+                    marked_ranked.add(team)
+                else:
+                    unranked.add(team)
+        self.demoted_opponents |= (unranked & marked_ranked)
+
+        # Second pass: load the games with that correction applied.
+        for line_num, row in rows:
+            home = row["home_team"].strip()
+            away = row["away_team"].strip()
+            home_score = int(row["home_score"])
+            away_score = int(row["away_score"])
+            try:
+                self.add_game(home, away, home_score, away_score,
+                              home_ranked=home not in unranked,
+                              away_ranked=away not in unranked)
+            except DuplicateGameError as exc:
+                raise DuplicateGameError(
+                    f"{filepath} line {line_num}: {exc}"
+                ) from None
 
     def add_game(self, home: str, away: str, home_score: int, away_score: int,
                  home_ranked: bool = True, away_ranked: bool = True) -> None:
@@ -404,6 +442,20 @@ class FBSRoundRobinRanker:
             w, l = out.get(other, (0, 0))
             out[other] = (w + 1, l) if pf > pa else (w, l + 1)
         return out
+
+    def teams_without_ranked_opponents(self) -> set:
+        """Ranked teams whose entire schedule was unranked opponents.
+
+        Such a team is in the rankings but connected to nothing in them: it can
+        share no round-robin group, and its position rests on however few games
+        it played.  In real data this almost always means the input is wrong —
+        a team that does not belong in the ranked pool was marked as if it did.
+        """
+        played = set()
+        for team_a, team_b in self._game_map:
+            played.add(team_a)
+            played.add(team_b)
+        return self.teams - played
 
     def _record_against(self, team: str, opponent_names) -> tuple:
         """(wins, losses, points_for, points_against) versus a set of opponents.
@@ -1020,6 +1072,22 @@ CSV input format:
     games = ranker.total_games()
     extra = f"  |  Repeat meetings: {games - pairs}" if games != pairs else ""
     print(f"Teams: {len(ranker.teams)}  |  Games: {games}{extra}")
+
+    if ranker.demoted_opponents:
+        names = ", ".join(sorted(ranker.demoted_opponents))
+        print(f"\nNote: {len(ranker.demoted_opponents)} opponent(s) were marked "
+              f"unranked on some games and ranked on others. Treating them as "
+              f"unranked throughout, since a blank classification field also "
+              f"reads as ranked:\n  {names}")
+
+    stranded = ranker.teams_without_ranked_opponents()
+    if stranded:
+        names = ", ".join(sorted(stranded))
+        print(f"\nNote: {len(stranded)} ranked team(s) played no ranked "
+              f"opponent at all, so nothing in the rankings is connected to "
+              f"them:\n  {names}\n"
+              f"  If these do not belong in the rankings, the input marked "
+              f"them as if they did.")
 
     results = ranker.rank()
     print_rankings(results)
