@@ -1466,6 +1466,79 @@ class TestOpponentWeightingOnAFullSchedule(unittest.TestCase):
         self.assertEqual(ranks[(1.0, 0.0, 0.0)], ranks[(0.5, 0.5, 0.0)])
 
 
+class TestInconsistentRankedMarking(unittest.TestCase):
+    """A team marked unranked anywhere is unranked everywhere.
+
+    Real CFBD data leaves the classification field blank on some games, and
+    a blank reads as ranked.  Taken row by row that promotes an FCS team into
+    the rankings on the fraction of its schedule that was left blank -- and
+    since the rows naming it correctly are the ones it played FBS teams in,
+    the games it lost are exactly the ones that get dropped.
+    """
+
+    def _write(self, rows):
+        fh = tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False,
+                                         newline="", encoding="utf-8")
+        writer = csv.writer(fh)
+        writer.writerow(["home_team", "home_score", "away_team", "away_score",
+                         "home_ranked", "away_ranked"])
+        writer.writerows(rows)
+        fh.close()
+        self.addCleanup(os.unlink, fh.name)
+        return fh.name
+
+    def setUp(self):
+        # Tarleton State beat Army (correctly marked) and beat UTEP (marked
+        # ranked, as a blank classification field would be).
+        path = self._write([
+            ["Army", 10, "Tarleton State", 20, "true", "false"],
+            ["UTEP", 14, "Tarleton State", 21, "true", "true"],
+            ["Army", 31, "Navy", 14, "true", "true"],
+        ])
+        self.r = FBSRoundRobinRanker()
+        self.r.load_csv(path)
+
+    def test_the_team_stays_out_of_the_rankings(self):
+        self.assertNotIn("Tarleton State", self.r.teams)
+        self.assertNotIn("Tarleton State", ranked_names(self.r.rank()))
+
+    def test_it_is_reported_as_demoted(self):
+        self.assertEqual(self.r.demoted_opponents, {"Tarleton State"})
+
+    def test_both_losses_still_count(self):
+        """The whole point: the blank-marked game is not silently dropped."""
+        self.assertEqual(self.r._overall_record("Army")[:2], (1, 1))
+        self.assertEqual(self.r._overall_record("UTEP")[:2], (0, 1))
+
+    def test_consistent_data_reports_nothing(self):
+        path = self._write([
+            ["Army", 10, "Tarleton State", 20, "true", "false"],
+            ["Army", 31, "Navy", 14, "true", "true"],
+        ])
+        r = FBSRoundRobinRanker()
+        r.load_csv(path)
+        self.assertEqual(r.demoted_opponents, set())
+        self.assertEqual(r.unranked_opponents, {"Tarleton State"})
+
+    def test_a_fully_ranked_file_is_untouched(self):
+        path = self._write([["Army", 31, "Navy", 14, "true", "true"]])
+        r = FBSRoundRobinRanker()
+        r.load_csv(path)
+        self.assertEqual(r.demoted_opponents, set())
+        self.assertEqual(r.teams, {"Army", "Navy"})
+
+    def test_duplicate_errors_still_name_the_line(self):
+        """The two-pass load must not lose the line number in the message."""
+        path = self._write([
+            ["Army", 31, "Navy", 14, "true", "true"],
+            ["Army", 20, "Navy", 17, "true", "true"],
+        ])
+        r = FBSRoundRobinRanker(on_duplicate="error")
+        with self.assertRaises(DuplicateGameError) as ctx:
+            r.load_csv(path)
+        self.assertIn("line 3", str(ctx.exception))
+
+
 class TestDefaultWeights(unittest.TestCase):
     """The shipped defaults are a deliberate choice, so pin them."""
 

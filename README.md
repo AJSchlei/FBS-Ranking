@@ -217,6 +217,20 @@ In a CSV the optional `home_ranked` / `away_ranked` columns carry the same
 information — `false`, `0`, `no`, `n` or `unranked` mean unranked; anything
 else, including a missing column, means ranked.  `fetch_games.py` writes them.
 
+**A team marked unranked in any row is treated as unranked in every row.**  The
+two markings are not equally trustworthy: `false` is positive evidence that a
+team sits outside the ranked division, while `true` is also what a blank or
+missing value defaults to.  CFBD does leave the classification field empty on
+some games, and taking each row at face value promotes an FCS team into the
+rankings on the fraction of its schedule that was left blank — near the *top*
+of them, because the rows naming it correctly are the ones where it played an
+FBS team, so the games it lost are exactly the ones dropped.  In a four-game
+test file that put Tarleton State 1st on a 1-0 record that was really 1-1.
+
+Teams corrected this way are listed in `demoted_opponents`, and the CLI prints
+a note naming them.  If you see that note, the source data is inconsistent —
+the ranking is right, but the input is worth a look.
+
 **Why count the game but not rank the team.**  Dropping these games hides the
 most damning result a team can have: in 2025 Army, Middle Tennessee, Eastern
 Michigan and Massachusetts each lost to an FCS team and none of it showed.  But
@@ -617,7 +631,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-162 tests cover:
+168 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -657,6 +671,10 @@ of this file shows the latest result.
   opposition — while the final order does not move, because chained 2-clique
   verdicts already separate the two and outrank anything the blend says
 - The shipped defaults themselves, so a weighting cannot drift unnoticed
+- Inconsistent ranked markings: a team marked unranked on one row and ranked on
+  another staying out of the rankings, both of its opponents' losses still
+  counting, consistent files reporting nothing, and the two-pass load still
+  naming the offending line on a duplicate
 - The blend: (1, 0, 0) reproducing the shrunk record, weights interpolating,
   an opponent's record excluding the team being scored, unranked opponents
   staying out of the averages, cached metrics recomputing when a game is added
