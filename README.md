@@ -418,7 +418,7 @@ who each of them played.  `BLEND_WEIGHTS` sets that blend, as
 `(own record, opponents' records, opponents' opponents' records)`:
 
 ```
-blended score = a x WP + b x OWP + c x OOWP   # default (0.67, 0.22, 0.11)
+blended score = a x WP + b x OWP + c x OOWP     # default (0.75, 0.25, 0.0)
 ```
 
 `(1.0, 0.0, 0.0)` is the plain shrunk record and reproduces the older
@@ -438,11 +438,12 @@ separates teams:
 
 | weights | own | opponents | opps' opps | own : opponent |
 |---------|-----|-----------|------------|----------------|
-| (1, 0, 0) | .1787 | -- | -- | no contest |
-| (.75, .25, 0) | .1340 | .0122 | -- | 11.0 : 1 |
-| **(.67, .22, .11)** | .1197 | .0108 | .0029 | **8.7 : 1** |
-| (.60, .30, .10) | .1072 | .0147 | .0027 | 6.2 : 1 |
-| (.50, .50, 0) | .0894 | .0245 | -- | 3.7 : 1 |
+| (1, 0, 0) | .1692 | -- | -- | no contest |
+| **(.75, .25, 0)** | .1269 | .0116 | -- | **11.0 : 1** |
+| (.67, .22, .11) | .1134 | .0102 | .0028 | 8.7 : 1 |
+| (.60, .27, .13) | .1015 | .0125 | .0033 | 6.4 : 1 |
+| (.60, .30, .10) | .1015 | .0139 | .0025 | 6.2 : 1 |
+| (.50, .50, 0) | .0846 | .0232 | -- | 3.7 : 1 |
 
 Measured against the plain shrunk record on four seasons.  "Record inversions"
 counts pairs where the lower-ranked team has a win percentage at least .150
@@ -451,43 +452,55 @@ working — so what matters is how the count *moves*.
 
 | weights | 2022 | 2023 | 2024 | 2025 |
 |---------|------|------|------|------|
-| (1, 0, 0) | 392 | 502 | 631 | 626 |
-| (.75, .25, 0) | 392 (+0.0%) | 503 (+0.2%) | 635 (+0.6%) | 624 (-0.3%) |
-| **(.67, .22, .11)** | **392 (+0.0%)** | **503 (+0.2%)** | **635 (+0.6%)** | **627 (+0.2%)** |
-| (.60, .30, .10) | 398 (+1.5%) | 503 (+0.2%) | 638 (+1.1%) | 628 (+0.3%) |
-| (.50, .50, 0) | 447 (+14.0%) | 517 (+3.0%) | 668 (+5.9%) | 640 (+2.2%) |
+| (1, 0, 0) | 392 | 502 | 631 | 617 |
+| **(.75, .25, 0)** | **392 (+0.0%)** | **503 (+0.2%)** | **635 (+0.6%)** | **617 (+0.0%)** |
+| (.67, .22, .11) | 392 (+0.0%) | 503 (+0.2%) | 635 (+0.6%) | 617 (+0.0%) |
+| (.60, .27, .13) | 394 (+0.5%) | 503 (+0.2%) | 638 (+1.1%) | 621 (+0.6%) |
+| (.60, .30, .10) | 398 (+1.5%) | 503 (+0.2%) | 638 (+1.1%) | 621 (+0.6%) |
+| (.50, .50, 0) | 447 (+14.0%) | 517 (+3.0%) | 668 (+5.9%) | 638 (+3.4%) |
 
 The default is flat in all four, never more than six tenths of a percent from
-the baseline in either direction, and matches the two-term `(.75, .25, 0)`
-exactly in three of the four.  The even split is worse in all four, and 2022
+the baseline in either direction.  Every weighting that drops own record to .60
+or below costs more, and the even split costs most of all.  The even split is worse in all four, and 2022
 punishes it by 14%.  That consistency is the argument for the default — not any
 single season's figure.
 
-### What the third term is for
+### Why the third term is zero
 
-At a tenth of the weight, opponents' opponents look nearly redundant: OOWP
-correlates .45 with OWP and varies a seventh as much as own record, so it moves
-only 9 to 22 teams a season, mostly by a place or two.  But the direction is
-consistent, and in one case it is the *only* thing that can produce the answer.
+The third weight is supported — `blended_score` honours any non-zero value —
+but ships at 0, because measurement did not justify carrying it.
 
-Against the two-term `(.75, .25, 0)`, moving to the default changes four things
-in four seasons' top 25 — the top 4 never moves:
+Opponents' opponents are nearly redundant with opponents: OOWP correlates about
+.45 with OWP and varies a sixth as much as own record.  Running `(.67, .22,
+.11)` against the shipped two-term weighting changes this much of four seasons'
+top 25, and the top 4 never moves:
 
-| season | change | OOWP edge to the team that rises |
-|---|---|---|
-| 2022 | Tennessee over Troy (#5/#6) | +.035 |
-| 2022 | Alabama over Tulane (#7/#8) | +.054 |
-| 2023 | Oklahoma State in at #25, Ohio out | +.048 |
-| 2025 | Ole Miss over Texas A&M (#7/#8) | +.019 |
+| season | change | OOWP edge to the team that rises | OWP already agreed? |
+|---|---|---|---|
+| 2022 | Tennessee over Troy (#5/#6) | +.035 | yes |
+| 2022 | Alabama over Tulane (#7/#8) | +.054 | yes |
+| 2023 | Oklahoma State in at #25, Ohio out | +.048 | yes |
+| 2024 | none | -- | -- |
+| 2025 | Tennessee over Missouri (#19/#20) | +.014 | yes |
 
-Every one lifts the team with the better opponents' opponents.  Three of them
-pit a power-conference team against a Group of Five team with a strong record,
-where the immediate opponents' records already pointed the same way.
+The direction is consistent — every change lifts the team with the better
+opponents' opponents.  **But in every case the immediate opponents' records
+already pointed the same way**, so nothing here needs a third layer to explain
+it.  An earlier version of this file claimed 2025 supplied a case where OOWP
+contradicted OWP and won, Ole Miss over Texas A&M on a worse opponents' record.
+That was an artifact of a `games_2025.csv` missing its games against unranked
+opponents; on the corrected file the pair does not move, and no case in four
+seasons shows the third term overruling the second.
 
-**The 2025 case is the one that could not happen otherwise.**  Ole Miss has the
-*worse* OWP (.486 against .497) and still rises, because its opponents played a
-markedly tougher slate in turn.  No other tier in this system can see one layer
-past a team's own schedule.
+**The own-record weight is the only parameter that really matters.**  How the
+remainder splits between the two opponent layers is very nearly a free choice:
+`(.60, .27, .13)` and `(.60, .30, .10)` produce an *identical* 2024 ranking and
+differ on at most 16 teams in any season, while moving own record from .67 to
+.60 shifts two to three times as many teams as folding the third term away
+entirely.  Choosing a weighting means choosing `a`; the rest is decoration.
+
+So the two-term form ships: it costs no more inversions than any three-term
+version tried, and it has one fewer moving part to explain.
 
 2025 alone would have oversold it: there it slightly *reduced* inversions,
 which looked like a point in its favour until the other three showed that was a
@@ -495,14 +508,14 @@ one-season accident rather than a property of the weighting.
 
 | season | weights | teams moved | median shift | max shift |
 |---|---|---|---|---|
-| 2022 | **(.67, .22, .11)** | 55 of 131 | 1 | 10 |
+| 2022 | **(.75, .25, 0)** | 54 of 131 | 1 | 9 |
 | 2022 | (.50, .50, 0) | 109 of 131 | 2 | 34 |
-| 2023 | **(.67, .22, .11)** | 58 of 133 | 1 | 25 |
+| 2023 | **(.75, .25, 0)** | 58 of 133 | 1 | 25 |
 | 2023 | (.50, .50, 0) | 93 of 133 | 2 | 24 |
-| 2024 | **(.67, .22, .11)** | 47 of 134 | 2 | 17 |
+| 2024 | **(.75, .25, 0)** | 47 of 134 | 2 | 17 |
 | 2024 | (.50, .50, 0) | 94 of 134 | 2 | 42 |
-| 2025 | **(.67, .22, .11)** | 58 of 136 | 1 | 17 |
-| 2025 | (.50, .50, 0) | 95 of 136 | 1 | 22 |
+| 2025 | **(.75, .25, 0)** | 24 of 136 | 1 | 12 |
+| 2025 | (.50, .50, 0) | 89 of 136 | 1 | 23 |
 
 Two figures worth keeping in view while reading those, because they are easy
 to mistake for each other:
@@ -512,7 +525,7 @@ to mistake for each other:
 | 2022 | 131 | 10 | 7,572 of 8,515 (88.9%) | .206 |
 | 2023 | 133 | 9 | 7,816 of 8,778 (89.0%) | .219 |
 | 2024 | 134 | 7 | 7,904 of 8,911 (88.7%) | .213 |
-| 2025 | 136 | 7 | 8,166 of 9,180 (89.0%) | .243 |
+| 2025 | 136 | 7 | 8,157 of 9,180 (88.9%) | .225 |
 
 Realignment shrank the largest round-robin group from 10 to 7, and changed the
 share of pairs reaching the blend not at all.  **About 89% of pairs reach
@@ -550,16 +563,14 @@ opponents at all.
 
 Two notes from these tables:
 
-- **An even split is a large change, not a moderate one.**  It moves 95 of 136
-  teams, puts LSU (6-5) above Missouri and Tennessee (both 7-4) on the strength
-  of a .09 schedule gap, and drops App State 22 places for having played
-  Charlotte (0-10), Georgia State (0-10) and Oregon State (1-8).
-- **A third term earns little on volume, and is not therefore noise.**
-  (.60, .30, .10) and (.60, .40, 0) produce identical top 25s and differ on 13
-  of 136 teams; the default differs from a two-term version of itself on 9 to
-  22 teams a season.  Most of what separates any two of these weightings comes
-  from the own-record weight rather than the third layer — but see "What the
-  third term is for" above for the case where that layer decides alone.
+- **An even split is a large change, not a moderate one.**  On 2025 it moves 80
+  of 136 teams against the default, puts LSU (7-5) above Missouri and Tennessee
+  (both 8-4) on the strength of a .09 opponents'-record gap, and drops App
+  State 23 places for having played a weak schedule.
+- **A third term earns little at any weight tried.**  (.60, .30, .10) and
+  (.60, .40, 0) produce identical top 25s; (.60, .27, .13) and (.60, .30, .10)
+  produce an identical 2024 ranking.  What separates any two of these
+  weightings is the own-record weight, not how the remainder is split.
 
 The large record inversions that remain (James Madison at 11-1 sitting below
 several 6-6 SEC teams) come from the group tiers and no weighting touches them.
