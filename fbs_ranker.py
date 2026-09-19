@@ -128,6 +128,17 @@ class FBSRoundRobinRanker:
     # of three bad opponents.
     BLEND_WEIGHTS = (0.75, 0.25, 0.0)
 
+    # How far apart two blended scores must be before the difference is
+    # treated as real.  Below this they are considered level and overall point
+    # differential decides instead.
+    #
+    # Measured across 2023-2025, one game is worth about .047 of blend to the
+    # team that played it and .0045 to a team whose opponent played it, so a
+    # gap below .001 is finer than any evidence the data can express — an
+    # artifact of averaging averages rather than anything that happened on a
+    # field.  Set to 0 to let any difference at all decide.
+    BLEND_EPSILON = 0.001
+
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a
     #: 1-1 record with points from both games; "error" refuses the dataset;
@@ -656,7 +667,7 @@ class FBSRoundRobinRanker:
         diff_a = opf_a - opa_a
         diff_b = opf_b - opa_b
 
-        if abs(wpc_a - wpc_b) > 1e-9:
+        if abs(wpc_a - wpc_b) > self.BLEND_EPSILON:
             strength = (0, abs(wpc_a - wpc_b), abs(diff_a - diff_b))
             return (-1 if wpc_a > wpc_b else 1), strength
 

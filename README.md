@@ -443,33 +443,56 @@ separates teams:
 | (.60, .30, .10) | .1072 | .0147 | .0027 | 6.2 : 1 |
 | (.50, .50, 0) | .0894 | .0245 | -- | 3.7 : 1 |
 
-Measured against the plain shrunk record on two seasons:
+Measured against the plain shrunk record on three seasons.  "Record
+inversions" counts pairs where the lower-ranked team has a win percentage at
+least .150 better; some are legitimate — a group verdict outranking a record is
+the system working — so what matters is how the count *moves*.
 
-| season | weights | teams moved | median shift | max shift | inversions |
-|---|---|---|---|---|---|
-| 2024 | record only | -- | -- | -- | 631 |
-| 2024 | **(.75, .25, 0)** | 47 of 134 | 2 | 17 | 635 (+0.6%) |
-| 2024 | (.60, .30, .10) | 63 of 134 | 2 | 18 | 638 (+1.1%) |
-| 2024 | (.50, .50, 0) | 95 of 134 | 2 | 42 | 669 (+6.0%) |
-| 2025 | record only | -- | -- | -- | 626 |
-| 2025 | **(.75, .25, 0)** | 40 of 136 | 1 | 9 | 624 (-0.3%) |
-| 2025 | (.60, .30, .10) | 69 of 136 | 1 | 17 | 628 (+0.3%) |
-| 2025 | (.50, .50, 0) | 94 of 136 | 1 | 22 | 640 (+2.2%) |
+| weights | 2023 | 2024 | 2025 |
+|---------|------|------|------|
+| (1, 0, 0) | 502 | 631 | 626 |
+| **(.75, .25, 0)** | **503 (+0.2%)** | **635 (+0.6%)** | **624 (-0.3%)** |
+| (.60, .30, .10) | 503 (+0.2%) | 638 (+1.1%) | 628 (+0.3%) |
+| (.50, .50, 0) | 517 (+3.0%) | 669 (+6.0%) | 640 (+2.2%) |
 
-"Record inversions" counts pairs where the lower-ranked team has a win
-percentage at least .150 better.  Some are legitimate — a group verdict
-outranking a record is the system working — so what matters is how the count
-*moves*.
+The default is effectively flat across all three, inside ±1% every year.  The
+even split is worse every year, by 2% to 6%.  That consistency is the argument
+for the default — not any single season's figure.
 
-The default stays within a percent of the baseline in both seasons, where an
-even split adds 2% to 6%.  It is the most conservative option that still gives
-schedule strength a voice, and 2025 alone would have oversold it: there it
-slightly *reduced* inversions, which looked like a point in its favour until
-2024 showed that was a one-season accident rather than a property.
+2025 alone would have oversold it: there it slightly *reduced* inversions,
+which looked like a point in its favour until 2024 and 2023 showed that was a
+one-season accident rather than a property of the weighting.
 
-2024 is the more demanding season generally — 873 games to 2025's 755, and
-every weighting moves teams further — so treat the 2025 figures as the
-optimistic end of the range.
+| season | weights | teams moved | median shift | max shift |
+|---|---|---|---|---|
+| 2023 | (.75, .25, 0) | 61 of 133 | 1 | 25 |
+| 2023 | (.50, .50, 0) | 94 of 133 | 2 | 24 |
+| 2024 | (.75, .25, 0) | 47 of 134 | 2 | 17 |
+| 2024 | (.50, .50, 0) | 95 of 134 | 2 | 42 |
+| 2025 | (.75, .25, 0) | 40 of 136 | 1 | 9 |
+| 2025 | (.50, .50, 0) | 94 of 136 | 1 | 22 |
+
+### The case the blend exists for
+
+2023 finished with four undefeated teams, so their records cannot separate
+them at all — every one is 13-0, win percentage .882:
+
+| team | record | own | opponents' |
+|------|--------|-----|-----------|
+| Washington | 13-0 | .882 | .552 |
+| Michigan | 13-0 | .882 | .552 |
+| Florida State | 13-0 | .882 | .540 |
+| **Liberty** | **13-0** | **.882** | **.468** |
+
+Liberty went undefeated in Conference USA.  Five of its twelve opponents
+finished 3-8, and its best was a 10-2 New Mexico State.  On record alone it
+ranks 3rd, ahead of Washington.  As opponent weight rises it falls to 4th,
+then 6th, then 8th.
+
+Nothing else in the system can make that distinction: no group contains both
+Liberty and Washington, they share no opponents, and their records are
+identical to the decimal.  This is the whole reason the strength-0 tier weighs
+opponents at all.
 
 Two notes from these tables:
 
@@ -497,6 +520,49 @@ python compare_weights.py games_2024.csv --weights 0.8,0.2,0 0.6,0.4,0 --top 40
 teams with six games each and no shared opponent, one 3-3 against a strong pool
 and one 4-2 against a weak one.  Record alone picks the 4-2 team; the blend
 picks the 3-3 team.
+
+### How close is too close
+
+Two blended scores can differ in the fourth decimal for no reason a game could
+account for, because they are averages of averages.  `BLEND_EPSILON` is how far
+apart they must be before the difference is treated as real; below it the two
+are level and overall point differential decides instead.
+
+Measured across 2023-2025, one game is worth this much blend:
+
+| | change in blended score |
+|---|---|
+| the team flips one of its own games | .047 |
+| one of its opponents flips one of theirs | .0045 |
+
+So a gap of .001 is about a fifth of one opponent-game — finer than any
+evidence the data can express.
+
+**The default is `.001`.**  It used to be a bare `1e-9` — float noise, so any
+difference at all decided.  In 2023 that put Washington above Michigan on a gap
+of .00012, overriding a 171-point differential (+354 against +183).  The two
+are undefeated, never played, share one opponent they both beat, and have win
+percentages identical to the last decimal; the only thing between them was a
+fourth-decimal difference in their opponents' records.  Under the current
+default they are level on the blend and Michigan's point differential decides.
+
+What each threshold costs, measured on the ~8,000 strength-0 pairs in each
+season:
+
+| threshold | pairs below it (2023 / 2024 / 2025) | teams whose rank changes |
+|---|---|---|
+| .0001 | 4 / 2 / 1 | 0 / 0 / 0 |
+| **.001 (default)** | **44 / 22 / 37** | **6 / 0 / 4** |
+| .005 | 214 / 184 / 188 | 7 / 0 / 8 |
+| .01 | 403 / 372 / 373 | 11 / 2 / 17 |
+
+Far fewer teams move than pairs reorder, because ranked pairs discards most
+strength-0 verdicts anyway — stronger evidence already orders those teams.
+Note also that pairs level on *both* blend and point differential are almost
+nonexistent (0 to 2 a season), so a wider threshold means "let point
+differential decide", not "declare more ties".
+
+---
 
 **The blend can never reorder teams a group or common opponents settled.**
 Strength 0 is the last tier consulted, and ranked pairs locks stronger
@@ -667,7 +733,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-205 tests cover:
+211 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -707,6 +773,9 @@ of this file shows the latest result.
   opposition — while the final order does not move, because chained 2-clique
   verdicts already separate the two and outrank anything the blend says
 - The shipped defaults themselves, so a weighting cannot drift unnoticed
+- `BLEND_EPSILON`: a gap above it deciding, a gap below it handing over to
+  point differential, equal scores on both counting as a genuine tie, and no
+  width of threshold reaching above strength 0
 - Inconsistent ranked markings: a team marked unranked on one row and ranked on
   another staying out of the rankings, both of its opponents' losses still
   counting, consistent files reporting nothing, and the two-pass load still

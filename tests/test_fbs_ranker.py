@@ -1615,6 +1615,93 @@ class TestRepeatMeetings(unittest.TestCase):
         self.assertEqual(r.repeat_meetings(), 2)
 
 
+class TestBlendEpsilon(unittest.TestCase):
+    """How far apart two blended scores must be to count as different.
+
+    The blend is built from shrunk averages, so two teams can differ in the
+    fourth decimal for no reason a game could account for.  Measured on the
+    2023-2025 seasons, one of a team's OWN games is worth about .047 of blend
+    and one game played by ONE of its opponents about .0045, so a gap below
+    .001 is finer than any evidence the data can express.
+
+    Until this was set deliberately the comparison used a bare 1e-9 literal —
+    float noise, meaning any difference at all decided.  In 2023 that put
+    Washington above Michigan on a gap of .00012, overriding a 171-point
+    differential.
+
+    No test pins the behaviour of a gap exactly equal to the threshold: the
+    comparison is a strict >, and floating point makes "exactly equal"
+    unreachable in practice — 0.5 + 0.001 - 0.5 is 0.0010000000000000009.
+    Nothing should depend on which side of the boundary such a gap lands.
+    """
+
+    class ScriptedBlend(FBSRoundRobinRanker):
+        """A ranker whose blended scores are dictated, not computed."""
+
+        scores: dict = {}
+
+        def blended_score(self, team):
+            return self.scores.get(team, 0.5)
+
+    def _ranker(self, epsilon, gap):
+        # Two teams that never meet and share nothing: strength 0 decides.
+        # X has the marginally better blend; Y has far the better point diff.
+        r = self.ScriptedBlend()
+        r.BLEND_EPSILON = epsilon
+        r.scores = {"X": 0.500 + gap, "Y": 0.500}
+        r.add_game("X", "Xo", 20, 17)      # X wins by 3
+        r.add_game("Y", "Yo", 60, 0)       # Y wins by 60
+        return r
+
+    def _cliques(self, ranker):
+        import networkx as nx
+        g = nx.Graph()
+        g.add_nodes_from(ranker.teams)
+        for ta, tb in ranker._game_map:
+            g.add_edge(ta, tb)
+        return list(nx.find_cliques(g))
+
+    def test_default_is_a_fifth_of_one_opponent_game(self):
+        self.assertEqual(FBSRoundRobinRanker.BLEND_EPSILON, 0.001)
+
+    def test_a_gap_finer_than_the_default_no_longer_decides(self):
+        """The 2023 Washington / Michigan shape: .00012 is not a difference."""
+        r = self._ranker(epsilon=FBSRoundRobinRanker.BLEND_EPSILON,
+                         gap=0.00012)
+        cmp, _ = r._pairwise_compare("X", "Y", self._cliques(r))
+        self.assertEqual(cmp, 1, "point differential should decide")
+
+    def test_a_gap_above_the_threshold_decides(self):
+        r = self._ranker(epsilon=0.0001, gap=0.001)
+        cmp, strength = r._pairwise_compare("X", "Y", self._cliques(r))
+        self.assertEqual(strength[0], 0)
+        self.assertEqual(cmp, -1, "X's better blend should win")
+
+    def test_a_gap_below_the_threshold_hands_over_to_point_differential(self):
+        r = self._ranker(epsilon=0.001, gap=0.0001)
+        cmp, strength = r._pairwise_compare("X", "Y", self._cliques(r))
+        self.assertEqual(cmp, 1, "Y's better point differential should win")
+        self.assertEqual(strength[1], 0.0, "the blend gap is not the reason")
+
+    def test_equal_blends_and_equal_point_diffs_are_a_genuine_tie(self):
+        r = self.ScriptedBlend()
+        r.scores = {"X": 0.5, "Y": 0.5}
+        r.add_game("X", "Xo", 20, 17)
+        r.add_game("Y", "Yo", 20, 17)
+        cmp, strength = r._pairwise_compare("X", "Y", self._cliques(r))
+        self.assertEqual(cmp, 0)
+        self.assertEqual(strength, (0, 0.0, 0))
+
+    def test_the_threshold_cannot_reach_above_strength_zero(self):
+        """A group verdict is unaffected however wide the threshold is."""
+        for epsilon in (1e-9, 0.001, 1.0):
+            r = make_ranker(("G1", "G2", 17, 14), ("G1", "G3", 20, 0),
+                            ("G2", "G3", 30, 10))
+            r.BLEND_EPSILON = epsilon
+            self.assertEqual(ranked_names(r.rank()), ["G1", "G2", "G3"],
+                             f"group order changed at epsilon={epsilon}")
+
+
 class TestDefaultWeights(unittest.TestCase):
     """The shipped defaults are a deliberate choice, so pin them."""
 
