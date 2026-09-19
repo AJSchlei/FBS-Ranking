@@ -2,9 +2,11 @@
 """
 Replay a season week by week and report when the ranking becomes meaningful.
 
-The ranker never contradicts a result it has seen, in Week 3 or Week 14, so
-"ordering integrity" holds at every point in a season.  That is not the same
-as the ranking being worth publishing.  Two things have to be true first:
+A ranking built this way is defensible at every point in a season in that it
+uses only results already played.  (It does NOT always agree with them --
+head_to_head.py measures how often it does not, which is 12-17% of decided
+pairs.)  Being defensible is not the same as being worth publishing.  Two
+things have to be true first:
 
   1. Teams have played enough games that their record outweighs the prior.
      Shrinkage regresses a record toward .500 by PRIOR_GAMES phantom games,

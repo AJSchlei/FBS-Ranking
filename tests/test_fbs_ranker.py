@@ -1231,13 +1231,12 @@ class TestCommonOpponentStrength(unittest.TestCase):
         _, strength = r._pairwise_compare("A", "B", self._cliques(r))
         self.assertEqual(strength[0], 1)
 
-    def test_teams_that_met_can_never_reach_strength_one(self):
+    def test_a_shared_opponent_puts_two_teams_that_met_in_a_group(self):
         """Playing each other plus any shared opponent IS a round-robin group.
 
         A shared opponent C completes the triangle A-B-C, so two teams that
-        met are always in a group together whenever they have a common
-        opponent at all.  The common-opponent tier is therefore structurally
-        reachable only by teams that never played.
+        met are in a group together whenever they have a common opponent at
+        all, and that group speaks before the common-opponent tier does.
         """
         r = make_ranker(
             ("B", "A", 21, 17),                       # B beats A directly
@@ -1247,6 +1246,34 @@ class TestCommonOpponentStrength(unittest.TestCase):
         self.assertTrue(any({"A", "B"} <= set(c) for c in self._cliques(r)))
         _, strength = r._pairwise_compare("A", "B", self._cliques(r))
         self.assertGreaterEqual(strength[0], 3)
+
+    def test_disagreeing_groups_let_a_pair_that_met_fall_through(self):
+        """Sharing a group is not the same as that group deciding anything.
+
+        This test exists because the one above was read as proving more than
+        it does.  Equally sized groups that contradict each other settle
+        nothing, so that size is skipped -- and a pair that PLAYED can fall
+        all the way past the common-opponent tier to the blend.
+
+        A beat B.  {A, B, C} says A is better (A is 2-0 inside it); {A, B, D}
+        says B is (both 1-1, and B has the point differential).  Both are size
+        3, so neither wins and the comparison drops out of the group tier
+        entirely.  Teams that met are NOT confined to strength >= 2.
+        """
+        r = make_ranker(
+            ("A", "B", 21, 20),
+            ("A", "C", 30, 0), ("C", "B", 30, 0),     # {A,B,C} favours A
+            ("D", "A", 30, 0), ("B", "D", 30, 0),     # {A,B,D} favours B
+        )
+        cliques = self._cliques(r)
+        shared = [c for c in cliques if {"A", "B"} <= set(c)]
+        self.assertEqual(sorted(len(c) for c in shared), [3, 3])
+        verdicts = {r._verdict_in_group("A", "B", c)[0] for c in shared}
+        self.assertEqual(verdicts, {-1, 1}, "the two groups must disagree")
+
+        _, strength = r._pairwise_compare("A", "B", cliques)
+        self.assertEqual(strength[0], 0,
+                         "a pair that met fell past groups AND common opponents")
 
     def test_common_opponents_outrank_the_blend(self):
         """A has the worse blended score but the better shared record.

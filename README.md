@@ -743,10 +743,12 @@ verdicts first, so a blend verdict is discarded whenever it contradicts one.
 
 ## When a ranking is worth generating
 
-Ordering integrity holds at *every* point in a season — the ranker never
-contradicts a result it has seen, in Week 3 or Week 14.  That is not the same
-as the ranking being worth publishing.  Early on it is mostly expressing the
-prior rather than the season.
+A ranking is defensible at every point in a season in the sense that it is
+built only from results already played.  That is not the same as the ranking
+being worth publishing, and it is *not* the same as the ranking agreeing with
+those results — see [Does the ranking agree with the games?](#does-the-ranking-agree-with-the-games)
+below, which measures how often it does not.  Early on the ranking is mostly
+expressing the prior rather than the season.
 
 `season_progression.py` replays a season week by week, re-ranking from scratch
 on the games played to each Monday.  Averaged over 2022-2025, mapped onto the
@@ -826,6 +828,90 @@ The week calendar is derived rather than hardcoded: Week 1 is the weekend
 ending on Labor Day, so Week 0's Saturday is nine days before it.  That rule
 reproduces the opening Saturday of 2022-2025 exactly, and a test asserts it
 against the data files.
+
+---
+
+## Does the ranking agree with the games?
+
+**It usually does, but not always, and the exceptions are not rare.**  Across
+every season in this repository the final ranking places the loser of a
+head-to-head series *above* the winner in **12% to 17% of decided pairs**:
+
+| season | decided series | contradicted | group ranked them the other way | verdict overridden |
+|---|---|---|---|---|
+| 2022 | 726 | 120 (16.5%) | 88 | 32 |
+| 2023 | 746 | 111 (14.9%) | 83 | 28 |
+| 2024 | 746 | 104 (13.9%) | 78 | 26 |
+| 2025 | 750 | 92 (12.3%) | 65 | 27 |
+| 2025 + postseason | 789 | 105 (13.3%) | 69 | 36 |
+
+A "decided" series is one a team won; pairs that split a series are counted
+separately, since there is no single result to contradict.
+
+This is a consequence of the tier hierarchy rather than a defect, but it was
+asserted in this README as impossible until `head_to_head.py` was written to
+check it.  **Two different mechanisms produce it, and they would need
+different fixes.**
+
+### The group ranked them the other way (the larger share)
+
+Inside a shared round-robin group, `_verdict_in_group` compares *in-group win
+percentage*, then *in-group point differential*.  It never looks at the
+head-to-head result.  A three-way cycle leaves all three teams 1-1, so point
+differential decides — and it can favour the team that lost the meeting:
+
+> Rice beat Louisiana 14-12.  In their three-team group with Texas State both
+> finished 1-1, so point differential broke the tie: Louisiana at +1 against
+> Rice's −29.  Louisiana finishes **#76**, Rice **#99**.
+
+The code comment says this is deliberate, and it is solving a real problem —
+raw head-to-head is not transitive, and a cycle has to break somewhere.  What
+had never been measured is the price: 65 to 88 reversed results a season.
+
+### The verdict was overridden (the smaller share)
+
+Here the comparison *does* favour the winner, and ranked pairs discards it
+because a chain of larger-group verdicts already implies the opposite.  This
+is the documented tier hierarchy working exactly as designed.
+
+**Interconference games are structurally the most fragile verdicts in the
+system.**  Two teams with no common opponent share no triangle, so the game
+between them is its own entire group — strength 2, the weakest group strength
+there is.  Of the 46 postseason matchups in 2025, **19 produced only a
+strength-2 verdict**, which is why the reversals cluster in bowls:
+
+> Old Dominion beat South Florida 24-10.  The pairwise verdict correctly
+> favours Old Dominion, at strength 2.  This chain, every link stronger,
+> overrides it:
+>
+> South Florida > Memphis `[6]` > Troy `[3]` > Arkansas State `[7]` >
+> Georgia Southern `[4]` > Old Dominion `[7]`
+>
+> Old Dominion finishes **#84**, South Florida **#16**.
+
+Restricted to the 2025 postseason alone, 8 of 44 decided series are
+contradicted (18.2%) — and 6 of those 8 are this mechanism.
+
+### A related claim that was also wrong
+
+Two teams that played each other were documented as unable to fall below
+strength 2, on the reasoning that any shared opponent completes a triangle.
+Sharing a group is not the same as that group deciding anything: when equally
+sized groups contradict each other, that size settles nothing and is skipped.
+In 2025, California and SMU played, sat in two disagreeing four-team groups,
+and fell all the way to **strength 0** — decided by the blend despite having
+met on the field.  `test_disagreeing_groups_let_a_pair_that_met_fall_through`
+now pins this.
+
+```bash
+python head_to_head.py games_2025_both.csv
+python head_to_head.py games_20*.csv --list 15
+python head_to_head.py games_2025_both.csv --since 2025-12-14   # bowls only
+python head_to_head.py games_2025.csv --max-pct 15              # regression guard
+```
+
+`--max-pct` exits non-zero when the rate goes above a limit, so this can guard
+a change rather than merely describe one.
 
 ---
 
@@ -1060,6 +1146,11 @@ of this file shows the latest result.
   cutoffs, evidence tiers covering each pair exactly once, the clique index
   agreeing with an unindexed comparison, and Kendall tau-b matching published
   values on tie-heavy cases
+- `head_to_head.py`: both mechanisms that put a winner below the team it beat
+  (a cycle broken by point differential, and a strength-2 verdict discarded by
+  a chain of larger groups), split series counted as neither, the --since
+  filter narrowing what is audited without narrowing what the ranking saw, and
+  the per-season counts pinned so a change has to move them deliberately
 - `fetch_games.py` classification: only an explicit `fbs` counting as FBS, an
   unclassified team not slipping through as one, case and padding ignored, and
   a response with no classification fields at all failing loudly rather than
