@@ -202,6 +202,61 @@ the API; it never writes anything back.
 
 ---
 
+## Regular season or postseason
+
+`--season-type` takes `regular` (the default), `postseason`, or `both`.
+Conference championship games are part of the regular season as CFBD files
+them, so `regular` already runs through Army-Navy; `both` adds the bowls and
+the playoff.  This repository carries each season in both forms —
+`games_2024.csv` and `games_2024_both.csv` — because the choice is a question
+about what the ranking is *for*, not one the data settles.
+
+The postseason is about 45 games against 900, but its effect is larger than
+that suggests, because bowls are cross-conference edges and the graph is short
+of those:
+
+| season | games added | pairs promoted out of strength 0 | via a new shared opponent | because the two played |
+|---|---|---|---|---|
+| 2022 | 42 | 107 | 48 | 43 |
+| 2023 | 42 | 104 | 48 | 43 |
+| 2024 | 46 | 151 | 64 | 47 |
+| 2025 | 46 | 120 | 56 | 40 |
+
+Every season shows the same two things.  **The multiplier is 2.5 to 3.3** — a
+bowl game settles its own pair and then ripples outward — and **the ripple is
+the larger half**: more pairs gain a shared opponent than actually play.  The
+share of pairs still reaching strength 0 falls by about one point (88.9% to
+87.9% in 2022, similarly elsewhere), so the structure barely moves.
+
+**Where it lands is the opposite of what you would guess.**  The top 10 is the
+most stable part of the ranking in all four seasons — 6 to 9 teams move, mean
+shift 2.0 to 6.6 — while 45 to 50 teams move in the 51-100 band every year.
+Those teams sit at strength 0 relative to almost everyone, so one bowl game is
+an enormous relative addition to their evidence.  Teams that played no bowl at
+all move too: in 2024 Kansas finished 5-7, played nothing in December, and rose
+68 to 33 because other teams' games reordered what it could be compared to.
+
+Postseason games mainly change **who is comparable to whom**, not who is good.
+
+On whether the champion finishes first:
+
+| season | champion | regular season | with postseason |
+|---|---|---|---|
+| 2022 | Georgia | #1 (13-0) | #1 (15-0) |
+| 2023 | Michigan | #1 (13-0) | #1 (15-0) |
+| 2024 | Ohio State | #4 (10-2) | #2 (14-2) |
+| 2025 | Indiana | #1 (13-0) | #1 (16-0) |
+
+Three of four, and in each of those the champion was undefeated, so the group
+tiers had already settled it.  2024 is the case worth understanding: Ohio State
+went 10-2, won four playoff games including beating Oregon 41-21, and still
+finishes behind Oregon's 13-0 regular season.  A bowl result is strength 2, and
+Oregon's place was fixed by a 4-team group whose verdicts outrank it.  That is
+the tier hierarchy working as designed — "best season" and "best team in
+January" are different questions, and this system answers the first.
+
+---
+
 ## Unranked opponents
 
 An FBS schedule usually includes one FCS opponent.  Those games are loaded, but
