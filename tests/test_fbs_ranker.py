@@ -1280,6 +1280,62 @@ class TestCommonOpponentStrength(unittest.TestCase):
         self.assertEqual(r._head_to_head_verdict("B", "A"), 1)
         self.assertIsNone(r._head_to_head_verdict("A", "Nobody"))
 
+    def test_acyclic_tiebreak_uses_the_meeting_when_the_tied_set_is_an_order(self):
+        """Two teams tied at 2-1 in a four-team group; their meeting decides.
+
+        The tied set is just {A, B}, which cannot hold a cycle, so the
+        head-to-head result is safe to honour.  Point differential would say
+        the opposite (B is +59 inside the group, A is -18).
+        """
+        games = (("A", "B", 21, 20), ("A", "C", 21, 0), ("D", "A", 40, 0),
+                 ("B", "C", 30, 0), ("B", "D", 30, 0), ("C", "D", 30, 0))
+        group = ["A", "B", "C", "D"]
+        base = make_ranker(*games)
+        self.assertEqual(base._verdict_in_group("A", "B", group)[0], 1)
+
+        acyclic = make_ranker(*games)
+        acyclic.GROUP_TIEBREAK = "head_to_head_acyclic"
+        self.assertTrue(acyclic._tied_set_is_acyclic(group, 2 / 3))
+        self.assertEqual(acyclic._verdict_in_group("A", "B", group)[0], -1)
+
+    def test_acyclic_tiebreak_stands_aside_for_a_cycle(self):
+        """In a 3-way cycle no ordering honours every meeting, so it defers.
+
+        This is the whole point of the variant: it matches plain
+        head_to_head where the meetings agree, and plain point_diff where
+        they cannot.
+        """
+        games = (("A", "B", 21, 20), ("B", "C", 21, 0), ("C", "A", 30, 0))
+        group = ["A", "B", "C"]
+        acyclic = make_ranker(*games)
+        acyclic.GROUP_TIEBREAK = "head_to_head_acyclic"
+        self.assertFalse(acyclic._tied_set_is_acyclic(group, 0.5))
+
+        base = make_ranker(*games)
+        self.assertEqual(acyclic._verdict_in_group("A", "B", group)[0],
+                         base._verdict_in_group("A", "B", group)[0])
+
+    def test_a_tied_set_too_small_to_cycle_is_acyclic(self):
+        r = make_ranker(("A", "B", 21, 20))
+        self.assertTrue(r._tied_set_is_acyclic(["A", "B"], 1.0))
+
+    def test_a_split_series_contributes_no_arc_to_the_cycle_check(self):
+        """A and B split, so nothing points either way and no cycle closes."""
+        r = make_ranker(("A", "B", 21, 0), ("B", "A", 21, 0),
+                        ("B", "C", 21, 0), ("C", "A", 21, 0))
+        self.assertIsNone(r._head_to_head_verdict("A", "B"))
+        self.assertTrue(r._tied_set_is_acyclic(["A", "B", "C"], 0.5))
+
+    def test_the_acyclic_cache_is_dropped_when_a_game_arrives(self):
+        # Records change when a game is added, so a stale answer would be
+        # read against a different tied set -- the bug the metrics cache had.
+        r = make_ranker(("A", "B", 21, 20), ("B", "C", 21, 0), ("C", "A", 30, 0))
+        r.GROUP_TIEBREAK = "head_to_head_acyclic"
+        r._tied_set_is_acyclic(["A", "B", "C"], 0.5)
+        self.assertTrue(r._acyclic_cache)
+        r.add_game("A", "D", 21, 0)
+        self.assertFalse(r._acyclic_cache)
+
     def test_the_tiebreak_cannot_reach_a_pair_separated_on_win_pct(self):
         """It is a TIEbreak: a decided in-group record is never overruled."""
         r = make_ranker(("A", "B", 21, 20), ("A", "C", 30, 0), ("B", "C", 30, 0))

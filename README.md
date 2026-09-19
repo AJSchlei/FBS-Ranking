@@ -944,6 +944,50 @@ per cycle; consulting the meeting breaks closer to that minimum, while point
 differential breaks more than it needs to.  The 2024 and 2022 splits agree
 (−21/+8 and −19/+4).
 
+**A third option, and it does not do what I expected.**
+`GROUP_TIEBREAK = "head_to_head_acyclic"` consults the meeting only when the
+tied teams' results among *themselves* contain no cycle — the idea being to
+keep the gain and drop the churn.  All three modes, against the floor:
+
+| season | point_diff | head_to_head | head_to_head_acyclic | floor |
+|---|---|---|---|---|
+| 2022 | 120 | **105** | 112 | 88 |
+| 2023 | 111 | **90** | 95 | 78 |
+| 2024 | 104 | **91** | 95 | 74 |
+| 2025 | 92 | **74** | 86 | 64 |
+
+It captures *less* of the gain, not more — and the reason is obvious in
+hindsight.  The improvement lives inside the cycles, and this variant is
+defined to stand aside exactly there:
+
+| season | point_diff | head_to_head | head_to_head_acyclic |
+|---|---|---|---|
+| 2022 | 100 / 20 | 81 / 24 | 91 / 21 |
+| 2023 | 90 / 21 | 63 / 27 | 74 / 21 |
+| 2024 | 88 / 16 | 67 / 24 | 76 / 19 |
+| 2025 | 71 / 21 | 49 / 25 | 62 / 24 |
+
+*(contradictions inside a 3-cycle / outside one)*
+
+**But it is far cheaper, and that makes it a real option rather than a dead
+end.**  It is gentler on records and on the board:
+
+| season | inversions: h2h | inversions: acyclic | median shift h2h / acyclic | top 25 kept h2h / acyclic |
+|---|---|---|---|---|
+| 2022 | 392 → 741 (+349) | 392 → 479 (**+87**) | 8 / 14 | 20 / **22** |
+| 2023 | 503 → 693 (+190) | 503 → 489 (**−14**) | 8 / **1** | 23 / **24** |
+| 2024 | 635 → 601 (−34) | 635 → 596 (**−39**) | 6 / **4** | **22** / 21 |
+| 2025 | 617 → 780 (+163) | 617 → 727 (**+110**) | 12 / **4** | 16 / **20** |
+
+In 2023 the acyclic variant removes 16 contradictions **and** 14 record
+inversions — a free improvement on both counts.  2024 is free on both for
+either mode.  2022 and 2025 still cost something, but a third to a quarter of
+what plain head-to-head costs.
+
+So the three modes are points on a curve rather than a right answer: bigger
+correction and bigger disruption, or half the correction for a fraction of the
+price.
+
 **Why it stays off by default:** the gain is real but small against a floor
 that can never be reached, and it is paid for in a metric — agreement with
 records — that a reader of the rankings sees immediately.  The knob is here so
