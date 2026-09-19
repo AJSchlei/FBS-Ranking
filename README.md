@@ -521,6 +521,48 @@ teams with six games each and no shared opponent, one 3-3 against a strong pool
 and one 4-2 against a weak one.  Record alone picks the 4-2 team; the blend
 picks the 3-3 team.
 
+### How close is too close
+
+Two blended scores can differ in the fourth decimal for no reason a game could
+account for, because they are averages of averages.  `BLEND_EPSILON` is how far
+apart they must be before the difference is treated as real; below it the two
+are level and overall point differential decides instead.
+
+Measured across 2023-2025, one game is worth this much blend:
+
+| | change in blended score |
+|---|---|
+| the team flips one of its own games | .047 |
+| one of its opponents flips one of theirs | .0045 |
+
+So a gap of .001 is about a fifth of one opponent-game — finer than any
+evidence the data can express.
+
+**The shipped default is `1e-9`, float noise only, so any difference at all
+decides.**  In 2023 that put Washington above Michigan on a gap of .00012,
+overriding a 171-point differential (+354 against +183).  The two are
+undefeated, never played, share one opponent they both beat, and have win
+percentages identical to the last decimal — the only thing between them is a
+fourth-decimal difference in their opponents' records.
+
+What a wider threshold would cost, measured on the ~8,000 strength-0 pairs in
+each season:
+
+| threshold | pairs below it (2023 / 2024 / 2025) | teams whose rank changes |
+|---|---|---|
+| .0001 | 4 / 2 / 1 | 0 / 0 / 0 |
+| .001 | 44 / 22 / 37 | 6 / 0 / 4 |
+| .005 | 214 / 184 / 188 | 7 / 0 / 8 |
+| .01 | 403 / 372 / 373 | 11 / 2 / 17 |
+
+Far fewer teams move than pairs reorder, because ranked pairs discards most
+strength-0 verdicts anyway — stronger evidence already orders those teams.
+Note also that pairs level on *both* blend and point differential are almost
+nonexistent (0 to 2 a season), so a wider threshold means "let point
+differential decide", not "declare more ties".
+
+---
+
 **The blend can never reorder teams a group or common opponents settled.**
 Strength 0 is the last tier consulted, and ranked pairs locks stronger
 verdicts first, so a blend verdict is discarded whenever it contradicts one.
@@ -690,7 +732,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-205 tests cover:
+210 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -730,6 +772,9 @@ of this file shows the latest result.
   opposition — while the final order does not move, because chained 2-clique
   verdicts already separate the two and outrank anything the blend says
 - The shipped defaults themselves, so a weighting cannot drift unnoticed
+- `BLEND_EPSILON`: a gap above it deciding, a gap below it handing over to
+  point differential, equal scores on both counting as a genuine tie, and no
+  width of threshold reaching above strength 0
 - Inconsistent ranked markings: a team marked unranked on one row and ranked on
   another staying out of the rankings, both of its opponents' losses still
   counting, consistent files reporting nothing, and the two-pass load still
