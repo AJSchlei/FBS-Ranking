@@ -118,23 +118,24 @@ class FBSRoundRobinRanker:
     # opponents' opponents' records); they should sum to 1.  (1, 0, 0) is the
     # plain shrunk record.
     #
-    # The default gives own record two thirds and splits the rest 2:1 between
-    # the opponent layers.  Nominal weight overstates a term's influence,
-    # because the three metrics do not vary equally: across the 2025 field own
-    # record spans .133-.875, opponents' records only .383-.617, and opponents'
-    # opponents' only .436-.568, each averaging layer pulling harder toward
-    # .500.  Weight times spread is what actually decides, and this default
-    # puts own record about 8.7 to 1 against the two opponent terms together.
-    # An even split makes it 3.7 to 1, which moves 80 of 136 teams on 2025 and
-    # costs 3% to 14% more record inversions depending on the season.
+    # The default gives opponents a quarter weight and leaves opponents'
+    # opponents out.  Nominal weight overstates a term's influence, because the
+    # three metrics do not vary equally: across the 2025 field own record spans
+    # .125-.882, opponents' records only .421-.638, and opponents' opponents'
+    # only .468-.594, each averaging layer pulling harder toward .500.  Weight
+    # times spread is what actually decides, and this default puts own record
+    # about 11 to 1 against opponents.  An even split makes it 3.7 to 1, which
+    # moves 80 of 136 teams on 2025 and costs 3% to 14% more record inversions
+    # depending on the season.
     #
-    # The third term is nearly redundant with the second: across four seasons
-    # it changes at most a few places in the top 25, and in every such case the
-    # opponents' records already pointed the same way.  (1 - a) split two ways
-    # rather than one is defensible as an RPI-shaped weighting, but nothing
-    # measured here shows the third layer earning its place; (.75, .25, 0)
-    # produces identical record inversions in all four seasons.
-    BLEND_WEIGHTS = (0.67, 0.22, 0.11)
+    # A third term was tried at .11 and .13 and dropped.  It is nearly
+    # redundant with the second: across four seasons it changed at most a few
+    # places in the top 25, and in every case the opponents' records already
+    # pointed the same way.  Measurement also showed the own-record weight is
+    # the only parameter that really matters — (.60, .27, .13) and
+    # (.60, .30, .10) produce an identical 2024 ranking — so the simpler two
+    # terms say the same thing with one fewer moving part.
+    BLEND_WEIGHTS = (0.75, 0.25, 0.0)
 
     # How far apart two blended scores must be before the difference is
     # treated as real.  Below this they are considered level and overall point
