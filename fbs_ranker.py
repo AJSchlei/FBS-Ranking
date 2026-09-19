@@ -125,13 +125,15 @@ class FBSRoundRobinRanker:
     # opponents' only .436-.568, each averaging layer pulling harder toward
     # .500.  Weight times spread is what actually decides, and this default
     # puts own record about 8.7 to 1 against the two opponent terms together.
-    # An even split makes it 3.7 to 1, which moves 94 of 136 teams and costs
-    # 2% to 14% more record inversions depending on the season.
+    # An even split makes it 3.7 to 1, which moves 80 of 136 teams on 2025 and
+    # costs 3% to 14% more record inversions depending on the season.
     #
-    # The third term is small but not redundant.  It is the only thing that can
-    # see past a team's own opponents: in 2025 it lifts Ole Miss above Texas
-    # A&M despite the WORSE opponents' record, because those opponents played a
-    # markedly tougher slate in turn.
+    # The third term is nearly redundant with the second: across four seasons
+    # it changes at most a few places in the top 25, and in every such case the
+    # opponents' records already pointed the same way.  (1 - a) split two ways
+    # rather than one is defensible as an RPI-shaped weighting, but nothing
+    # measured here shows the third layer earning its place; (.75, .25, 0)
+    # produces identical record inversions in all four seasons.
     BLEND_WEIGHTS = (0.67, 0.22, 0.11)
 
     # How far apart two blended scores must be before the difference is
