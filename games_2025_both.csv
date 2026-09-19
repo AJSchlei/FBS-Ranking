@@ -1,0 +1,935 @@
+date,home_team,home_score,away_team,away_score,home_ranked,away_ranked
+2025-08-23,Kansas State,21,Iowa State,24,true,true
+2025-08-23,UNLV,38,Idaho State,31,true,false
+2025-08-23,Kansas,31,Fresno State,7,true,true
+2025-08-23,Western Kentucky,41,Sam Houston,24,true,true
+2025-08-23,Hawai'i,23,Stanford,20,true,true
+2025-08-28,South Florida,34,Boise State,7,true,true
+2025-08-28,Bowling Green,26,Lafayette,7,true,false
+2025-08-28,Rutgers,34,Ohio,31,true,true
+2025-08-28,Delaware,35,Delaware State,17,true,false
+2025-08-28,UCF,17,Jacksonville State,10,true,true
+2025-08-28,NC State,24,East Carolina,17,true,true
+2025-08-28,Akron,0,Wyoming,10,true,true
+2025-08-28,UL Monroe,29,Saint Francis,0,true,false
+2025-08-28,Duke,45,Elon,17,true,false
+2025-08-28,Oklahoma State,27,UT Martin,7,true,false
+2025-08-28,Missouri,61,Central Arkansas,6,true,false
+2025-08-29,Houston,27,Stephen F. Austin,0,true,false
+2025-08-29,Minnesota,23,Buffalo,10,true,true
+2025-08-29,UAB,52,Alabama State,42,true,false
+2025-08-29,Wisconsin,17,Miami (OH),0,true,true
+2025-08-29,Cincinnati,17,Nebraska,20,true,true
+2025-08-29,San Diego State,42,Stony Brook,0,true,false
+2025-08-29,Army,27,Tarleton State,30,true,false
+2025-08-29,Wake Forest,10,Kennesaw State,9,true,true
+2025-08-29,Charlotte,11,App State,34,true,true
+2025-08-29,Michigan State,23,Western Michigan,6,true,true
+2025-08-29,Florida International,42,Bethune-Cookman,9,true,false
+2025-08-29,Illinois,52,Western Illinois,3,true,false
+2025-08-29,Kansas,46,Wagner,7,true,false
+2025-08-30,Baylor,24,Auburn,38,true,true
+2025-08-30,Colorado,20,Georgia Tech,27,true,true
+2025-08-30,Sam Houston,21,UNLV,38,true,true
+2025-08-30,San José State,14,Central Michigan,16,true,true
+2025-08-30,Navy,52,VMI,7,true,false
+2025-08-30,Southern Miss,17,Mississippi State,34,true,true
+2025-08-30,Tennessee,45,Syracuse,26,true,true
+2025-08-30,Kent State,21,Merrimack,17,true,false
+2025-08-30,Pittsburgh,61,Duquesne,9,true,false
+2025-08-30,Tulane,23,Northwestern,3,true,true
+2025-08-30,Ohio State,14,Texas,7,true,true
+2025-08-30,Purdue,31,Ball State,0,true,true
+2025-08-30,Maryland,39,Florida Atlantic,7,true,true
+2025-08-30,Kentucky,24,Toledo,16,true,true
+2025-08-30,Boston College,66,Fordham,10,true,false
+2025-08-30,West Virginia,45,Robert Morris,3,true,false
+2025-08-30,UConn,59,Central Connecticut,13,true,false
+2025-08-30,Indiana,27,Old Dominion,14,true,true
+2025-08-30,Louisville,51,Eastern Kentucky,17,true,false
+2025-08-30,Air Force,49,Bucknell,13,true,false
+2025-08-30,Georgia,45,Marshall,7,true,true
+2025-08-30,Northern Illinois,19,Holy Cross,17,true,false
+2025-08-30,Penn State,46,Nevada,11,true,true
+2025-08-30,Massachusetts,10,Temple,42,true,true
+2025-08-30,Iowa State,55,South Dakota,7,true,false
+2025-08-30,Florida State,31,Alabama,17,true,true
+2025-08-30,Liberty,28,Maine,7,true,false
+2025-08-30,Oregon,59,Montana State,13,true,false
+2025-08-30,Arkansas,52,Alabama A&M,7,true,false
+2025-08-30,Memphis,45,Chattanooga,10,true,false
+2025-08-30,Virginia,48,Coastal Carolina,7,true,true
+2025-08-30,Oklahoma,35,Illinois State,3,true,false
+2025-08-30,Iowa,34,UAlbany,7,true,false
+2025-08-30,James Madison,45,Weber State,10,true,false
+2025-08-30,Arkansas State,42,Southeast Missouri State,24,true,false
+2025-08-30,Middle Tennessee,14,Austin Peay,34,true,false
+2025-08-30,Texas A&M,42,UTSA,24,true,true
+2025-08-30,Kansas State,38,North Dakota,35,true,false
+2025-08-30,South Alabama,38,Morgan State,21,true,false
+2025-08-30,Florida,55,Long Island University,0,true,false
+2025-08-30,Vanderbilt,45,Charleston Southern,3,true,false
+2025-08-30,Western Kentucky,55,North Alabama,6,true,false
+2025-08-30,Troy,38,Nicholls,20,true,false
+2025-08-30,USC,73,Missouri State,13,true,true
+2025-08-30,Louisiana Tech,24,SE Louisiana,0,true,false
+2025-08-30,Clemson,10,LSU,17,true,true
+2025-08-30,Michigan,34,New Mexico,17,true,true
+2025-08-30,Utah State,28,UTEP,16,true,true
+2025-08-30,Texas Tech,67,Arkansas-Pine Bluff,7,true,false
+2025-08-30,Ole Miss,63,Georgia State,7,true,true
+2025-08-31,North Texas,51,Lamar,0,true,false
+2025-08-31,BYU,69,Portland State,0,true,false
+2025-08-31,Tulsa,35,Abilene Christian,7,true,false
+2025-08-31,Texas State,52,Eastern Michigan,27,true,true
+2025-08-31,Louisiana,12,Rice,14,true,true
+2025-08-31,New Mexico State,19,Bryant,3,true,false
+2025-08-31,SMU,42,East Texas A&M,13,true,false
+2025-08-31,Fresno State,42,Georgia Southern,14,true,true
+2025-08-31,Washington State,13,Idaho,10,true,false
+2025-08-31,Arizona State,38,Northern Arizona,19,true,false
+2025-08-31,Oregon State,15,California,34,true,true
+2025-08-31,Arizona,40,Hawai'i,6,true,true
+2025-08-31,Washington,38,Colorado State,21,true,true
+2025-08-31,UCLA,10,Utah,43,true,true
+2025-08-31,South Carolina,24,Virginia Tech,11,true,true
+2025-08-31,Miami,27,Notre Dame,24,true,true
+2025-09-02,North Carolina,14,TCU,48,true,true
+2025-09-05,Louisville,28,James Madison,14,true,true
+2025-09-05,Northwestern,42,Western Illinois,7,true,false
+2025-09-05,Maryland,20,Northern Illinois,9,true,true
+2025-09-06,Boise State,51,Eastern Washington,14,true,false
+2025-09-06,Jacksonville State,34,Liberty,24,true,true
+2025-09-06,Pittsburgh,45,Central Michigan,17,true,true
+2025-09-06,Texas,38,San José State,7,true,true
+2025-09-06,Texas Tech,62,Kent State,14,true,true
+2025-09-06,NC State,35,Virginia,31,true,true
+2025-09-06,Indiana,56,Kennesaw State,9,true,true
+2025-09-06,Penn State,34,Florida International,0,true,true
+2025-09-06,Florida State,77,East Texas A&M,3,true,false
+2025-09-06,Iowa State,16,Iowa,13,true,true
+2025-09-06,SMU,45,Baylor,48,true,true
+2025-09-06,Syracuse,27,UConn,20,true,true
+2025-09-06,Minnesota,66,Northwestern State,0,true,false
+2025-09-06,Duke,19,Illinois,45,true,true
+2025-09-06,Texas A&M,44,Utah State,22,true,true
+2025-09-06,Temple,55,Howard,7,true,false
+2025-09-06,Wake Forest,42,Western Carolina,10,true,false
+2025-09-06,New Mexico,32,Idaho State,22,true,false
+2025-09-06,Clemson,27,Troy,16,true,true
+2025-09-06,Rutgers,45,Miami (OH),17,true,true
+2025-09-06,Massachusetts,26,Bryant,27,true,false
+2025-09-06,Cincinnati,34,Bowling Green,20,true,true
+2025-09-06,Western Michigan,30,North Texas,33,true,true
+2025-09-06,Navy,38,UAB,24,true,true
+2025-09-06,UTSA,36,Texas State,43,true,true
+2025-09-06,Oregon State,27,Fresno State,36,true,true
+2025-09-06,Kentucky,23,Ole Miss,30,true,true
+2025-09-06,Tennessee,72,East Tennessee State,17,true,false
+2025-09-06,Ohio State,70,Grambling,0,true,false
+2025-09-06,Georgia,28,Austin Peay,6,true,false
+2025-09-06,App State,20,Lindenwood,13,true,false
+2025-09-06,Colorado,31,Delaware,7,true,true
+2025-09-06,Buffalo,45,Saint Francis,6,true,false
+2025-09-06,Georgia Tech,59,Gardner-Webb,12,true,false
+2025-09-06,Oregon,69,Oklahoma State,3,true,true
+2025-09-06,Missouri,42,Kansas,31,true,true
+2025-09-06,Wyoming,31,Northern Iowa,7,true,false
+2025-09-06,Ohio,17,West Virginia,10,true,true
+2025-09-06,Wisconsin,42,Middle Tennessee,10,true,true
+2025-09-06,Florida,16,South Florida,18,true,true
+2025-09-06,Nevada,20,Sacramento State,17,true,false
+2025-09-06,Southern Miss,38,Jackson State,20,true,false
+2025-09-06,Arkansas,56,Arkansas State,14,true,true
+2025-09-06,Marshall,20,Missouri State,21,true,true
+2025-09-06,East Carolina,56,Campbell,3,true,false
+2025-09-06,California,35,Texas Southern,3,true,false
+2025-09-06,Florida Atlantic,56,Florida A&M,14,true,false
+2025-09-06,Utah,63,Cal Poly,9,true,false
+2025-09-06,Old Dominion,54,North Carolina Central,6,true,false
+2025-09-06,Kansas State,21,Army,24,true,true
+2025-09-06,UCF,68,North Carolina A&T,7,true,false
+2025-09-06,Charlotte,3,North Carolina,20,true,true
+2025-09-06,Miami,45,Bethune-Cookman,3,true,false
+2025-09-06,Toledo,45,Western Kentucky,21,true,true
+2025-09-06,Rice,9,Houston,35,true,true
+2025-09-06,Georgia State,16,Memphis,38,true,true
+2025-09-06,South Alabama,31,Tulane,33,true,true
+2025-09-06,South Carolina,38,South Carolina State,10,true,false
+2025-09-06,Eastern Michigan,23,Long Island University,28,true,false
+2025-09-06,Colorado State,21,Northern Colorado,17,true,false
+2025-09-06,Coastal Carolina,13,Charleston Southern,0,true,false
+2025-09-06,Auburn,42,Ball State,3,true,true
+2025-09-06,Purdue,34,Southern Illinois,17,true,false
+2025-09-06,LSU,23,Louisiana Tech,7,true,true
+2025-09-06,Oklahoma,24,Michigan,13,true,true
+2025-09-06,Nebraska,68,Akron,0,true,true
+2025-09-06,Virginia Tech,20,Vanderbilt,44,true,true
+2025-09-06,USC,59,Georgia Southern,20,true,true
+2025-09-06,Michigan State,42,Boston College,40,true,true
+2025-09-06,Mississippi State,24,Arizona State,20,true,true
+2025-09-06,Alabama,73,UL Monroe,0,true,true
+2025-09-07,UNLV,30,UCLA,23,true,true
+2025-09-07,Louisiana,34,McNeese,10,true,false
+2025-09-07,New Mexico State,21,Tulsa,14,true,true
+2025-09-07,UTEP,42,UT Martin,17,true,false
+2025-09-07,Arizona,48,Weber State,3,true,false
+2025-09-07,Washington State,36,San Diego State,13,true,true
+2025-09-07,BYU,27,Stanford,3,true,true
+2025-09-07,Washington,70,UC Davis,10,true,false
+2025-09-07,Hawai'i,37,Sam Houston,20,true,true
+2025-09-11,Wake Forest,24,NC State,34,true,true
+2025-09-12,Indiana,73,Indiana State,0,true,false
+2025-09-12,Syracuse,66,Colgate,24,true,false
+2025-09-12,Houston,36,Colorado,20,true,true
+2025-09-13,Arizona,23,Kansas State,17,true,true
+2025-09-13,UCLA,10,New Mexico,35,true,true
+2025-09-13,Nebraska,59,Houston Christian,7,true,false
+2025-09-13,Alabama,38,Wisconsin,14,true,true
+2025-09-13,Northwestern,14,Oregon,34,true,true
+2025-09-13,Temple,3,Oklahoma,42,true,true
+2025-09-13,Michigan,63,Central Michigan,3,true,true
+2025-09-13,Maryland,44,Towson,17,true,false
+2025-09-13,Virginia,55,William & Mary,16,true,false
+2025-09-13,Kent State,28,Buffalo,31,true,true
+2025-09-13,Troy,7,Memphis,28,true,true
+2025-09-13,Georgia Tech,24,Clemson,21,true,true
+2025-09-13,Baylor,42,Samford,7,true,false
+2025-09-13,Auburn,31,South Alabama,15,true,true
+2025-09-13,Missouri,52,Louisiana,10,true,true
+2025-09-13,Ball State,34,New Hampshire,29,true,false
+2025-09-13,Delaware,44,UConn,41,true,true
+2025-09-13,Texas Tech,45,Oregon State,14,true,true
+2025-09-13,Tennessee,41,Georgia,44,true,true
+2025-09-13,Rutgers,60,Norfolk State,10,true,false
+2025-09-13,North Texas,59,Washington State,10,true,true
+2025-09-13,West Virginia,31,Pittsburgh,24,true,true
+2025-09-13,Penn State,52,Villanova,6,true,false
+2025-09-13,Missouri State,10,SMU,28,true,true
+2025-09-13,Michigan State,41,Youngstown State,24,true,false
+2025-09-13,Purdue,17,USC,33,true,true
+2025-09-13,Toledo,60,Morgan State,0,true,false
+2025-09-13,Cincinnati,70,Northwestern State,0,true,false
+2025-09-13,UTSA,48,Incarnate Word,20,true,false
+2025-09-13,North Carolina,41,Richmond,6,true,false
+2025-09-13,Arkansas State,16,Iowa State,24,true,true
+2025-09-13,Texas,27,UTEP,10,true,true
+2025-09-13,Miami,49,South Florida,12,true,true
+2025-09-13,Bowling Green,23,Liberty,13,true,true
+2025-09-13,Nevada,13,Middle Tennessee,14,true,true
+2025-09-13,Charlotte,42,Monmouth,35,true,false
+2025-09-13,Mississippi State,63,Alcorn State,0,true,false
+2025-09-13,Florida International,38,Florida Atlantic,28,true,true
+2025-09-13,Marshall,38,Eastern Kentucky,7,true,false
+2025-09-13,Kennesaw State,27,Merrimack,13,true,false
+2025-09-13,Georgia Southern,41,Jacksonville State,34,true,true
+2025-09-13,Southern Miss,38,App State,22,true,true
+2025-09-13,Illinois,38,Western Michigan,0,true,true
+2025-09-13,Georgia State,37,Murray State,21,true,false
+2025-09-13,Ole Miss,41,Arkansas,35,true,true
+2025-09-13,Virginia Tech,26,Old Dominion,45,true,true
+2025-09-13,Ohio State,37,Ohio,9,true,true
+2025-09-13,Rice,38,Prairie View A&M,17,true,false
+2025-09-13,Kentucky,48,Eastern Michigan,23,true,true
+2025-09-13,Coastal Carolina,0,East Carolina,38,true,true
+2025-09-13,Iowa,47,Massachusetts,7,true,true
+2025-09-13,Notre Dame,40,Texas A&M,41,true,true
+2025-09-13,LSU,20,Florida,10,true,true
+2025-09-13,Louisiana Tech,49,New Mexico State,14,true,true
+2025-09-13,South Carolina,7,Vanderbilt,31,true,true
+2025-09-14,Tulsa,23,Navy,42,true,true
+2025-09-14,TCU,42,Abilene Christian,21,true,false
+2025-09-14,Tulane,34,Duke,27,true,true
+2025-09-14,Wyoming,6,Utah,31,true,true
+2025-09-14,UAB,31,Akron,28,true,true
+2025-09-14,Utah State,49,Air Force,30,true,true
+2025-09-14,Fresno State,56,Southern,7,true,false
+2025-09-14,California,27,Minnesota,14,true,true
+2025-09-14,Stanford,30,Boston College,20,true,true
+2025-09-14,Arizona State,34,Texas State,15,true,true
+2025-09-14,Hawai'i,23,Portland State,3,true,false
+2025-09-18,Charlotte,17,Rice,28,true,true
+2025-09-19,Oklahoma State,12,Tulsa,19,true,true
+2025-09-20,Rutgers,28,Iowa,38,true,true
+2025-09-20,Clemson,21,Syracuse,34,true,true
+2025-09-20,TCU,35,SMU,24,true,true
+2025-09-20,Wisconsin,10,Maryland,27,true,true
+2025-09-20,Louisville,40,Bowling Green,17,true,true
+2025-09-20,Utah,10,Texas Tech,34,true,true
+2025-09-20,Memphis,32,Arkansas,31,true,true
+2025-09-20,Army,38,North Texas,45,true,true
+2025-09-20,Virginia Tech,38,Wofford,6,true,false
+2025-09-20,South Florida,63,South Carolina State,14,true,false
+2025-09-20,Miami (OH),38,UNLV,41,true,true
+2025-09-20,Tennessee,56,UAB,24,true,true
+2025-09-20,Central Michigan,49,Wagner,10,true,false
+2025-09-20,Oregon,41,Oregon State,7,true,true
+2025-09-20,Florida State,66,Kent State,10,true,true
+2025-09-20,Oklahoma,24,Auburn,17,true,true
+2025-09-20,Notre Dame,56,Purdue,30,true,true
+2025-09-20,UConn,31,Ball State,25,true,true
+2025-09-20,Ohio,52,Gardner-Webb,35,true,false
+2025-09-20,Nebraska,27,Michigan,30,true,true
+2025-09-20,Buffalo,17,Troy,21,true,true
+2025-09-20,UCF,34,North Carolina,9,true,true
+2025-09-20,Western Michigan,14,Toledo,13,true,true
+2025-09-20,Ole Miss,45,Tulane,10,true,true
+2025-09-20,Liberty,13,James Madison,31,true,true
+2025-09-20,Eastern Michigan,34,Louisiana,31,true,true
+2025-09-20,Duke,45,NC State,33,true,true
+2025-09-20,Mississippi State,38,Northern Illinois,10,true,true
+2025-09-20,Georgia Tech,45,Temple,24,true,true
+2025-09-20,San José State,31,Idaho,28,true,false
+2025-09-20,Akron,51,Duquesne,7,true,false
+2025-09-20,Kennesaw State,28,Arkansas State,21,true,true
+2025-09-20,Florida International,16,Delaware,38,true,true
+2025-09-20,Kansas,41,West Virginia,10,true,true
+2025-09-20,Air Force,37,Boise State,49,true,true
+2025-09-20,Missouri State,42,UT Martin,10,true,false
+2025-09-20,Missouri,29,South Carolina,20,true,true
+2025-09-20,Western Kentucky,31,Nevada,16,true,true
+2025-09-20,Georgia Southern,45,Maine,17,true,false
+2025-09-20,Jacksonville State,45,Murray State,10,true,false
+2025-09-20,Middle Tennessee,28,Marshall,42,true,true
+2025-09-20,South Alabama,20,Coastal Carolina,38,true,true
+2025-09-20,Louisiana Tech,30,Southern Miss,20,true,true
+2025-09-20,Washington State,24,Washington,59,true,true
+2025-09-20,Miami,26,Florida,7,true,true
+2025-09-20,Virginia,48,Stanford,20,true,true
+2025-09-20,East Carolina,13,BYU,34,true,true
+2025-09-20,Indiana,63,Illinois,10,true,true
+2025-09-20,Baylor,24,Arizona State,27,true,true
+2025-09-20,Vanderbilt,70,Georgia State,21,true,true
+2025-09-20,LSU,56,SE Louisiana,10,true,false
+2025-09-21,Texas,55,Sam Houston,0,true,true
+2025-09-21,Utah State,48,McNeese,7,true,false
+2025-09-21,Texas State,35,Nicholls,3,true,false
+2025-09-21,UTEP,25,UL Monroe,31,true,true
+2025-09-21,Colorado State,16,UTSA,17,true,true
+2025-09-21,Colorado,37,Wyoming,20,true,true
+2025-09-21,San Diego State,34,California,0,true,true
+2025-09-21,USC,45,Michigan State,31,true,true
+2025-09-21,Hawai'i,21,Fresno State,23,true,true
+2025-09-25,East Carolina,28,Army,6,true,true
+2025-09-26,Virginia,46,Florida State,38,true,true
+2025-09-27,Arizona State,27,TCU,24,true,true
+2025-09-27,Oregon State,24,Houston,27,true,true
+2025-09-27,Illinois,34,USC,32,true,true
+2025-09-27,Pittsburgh,27,Louisville,34,true,true
+2025-09-27,Arkansas,13,Notre Dame,56,true,true
+2025-09-27,Kansas,34,Cincinnati,37,true,true
+2025-09-27,Ohio,35,Bowling Green,20,true,true
+2025-09-27,Kansas State,34,UCF,20,true,true
+2025-09-27,Syracuse,3,Duke,38,true,true
+2025-09-27,North Texas,36,South Alabama,22,true,true
+2025-09-27,Wake Forest,29,Georgia Tech,30,true,true
+2025-09-27,Minnesota,31,Rutgers,28,true,true
+2025-09-27,Vanderbilt,55,Utah State,35,true,true
+2025-09-27,Central Michigan,24,Eastern Michigan,13,true,true
+2025-09-27,James Madison,35,Georgia Southern,10,true,true
+2025-09-27,UL Monroe,28,Arkansas State,16,true,true
+2025-09-27,Toledo,45,Akron,3,true,true
+2025-09-27,Boston College,24,California,28,true,true
+2025-09-27,Oklahoma State,27,Baylor,45,true,true
+2025-09-27,Buffalo,17,UConn,20,true,true
+2025-09-27,Iowa,15,Indiana,20,true,true
+2025-09-27,Northwestern,17,UCLA,14,true,true
+2025-09-27,Miami (OH),38,Lindenwood,0,true,false
+2025-09-27,Washington,6,Ohio State,24,true,true
+2025-09-27,Navy,21,Rice,13,true,true
+2025-09-27,Northern Illinois,3,San Diego State,6,true,true
+2025-09-27,Texas A&M,16,Auburn,10,true,true
+2025-09-27,West Virginia,14,Utah,48,true,true
+2025-09-27,Ole Miss,24,LSU,19,true,true
+2025-09-27,New Mexico,38,New Mexico State,20,true,true
+2025-09-27,Air Force,35,Hawai'i,44,true,true
+2025-09-27,Tulsa,14,Tulane,31,true,true
+2025-09-27,Mississippi State,34,Tennessee,41,true,true
+2025-09-27,Kennesaw State,24,Middle Tennessee,16,true,true
+2025-09-27,Old Dominion,21,Liberty,7,true,true
+2025-09-27,Western Michigan,47,Rhode Island,14,true,false
+2025-09-27,Iowa State,39,Arizona,14,true,true
+2025-09-27,Florida Atlantic,26,Memphis,55,true,true
+2025-09-27,NC State,21,Virginia Tech,23,true,true
+2025-09-27,Southern Miss,42,Jacksonville State,25,true,true
+2025-09-27,Missouri State,22,Western Kentucky,27,true,true
+2025-09-27,Colorado State,3,Washington State,20,true,true
+2025-09-27,Georgia,21,Alabama,24,true,true
+2025-09-27,Stanford,30,San José State,29,true,true
+2025-09-27,Boise State,47,App State,14,true,true
+2025-09-27,Missouri,42,Massachusetts,6,true,true
+2025-09-27,Penn State,24,Oregon,30,true,true
+2025-09-27,South Carolina,35,Kentucky,13,true,true
+2025-09-28,Louisiana,54,Marshall,51,true,true
+2025-09-28,UTEP,11,Louisiana Tech,30,true,true
+2025-09-28,Colorado,21,BYU,24,true,true
+2025-10-03,New Mexico State,37,Sam Houston,10,true,true
+2025-10-03,South Florida,54,Charlotte,26,true,true
+2025-10-03,Delaware,24,Western Kentucky,27,true,true
+2025-10-04,San José State,35,New Mexico,28,true,true
+2025-10-04,BYU,38,West Virginia,24,true,true
+2025-10-04,San Diego State,45,Colorado State,24,true,true
+2025-10-04,Michigan,24,Wisconsin,10,true,true
+2025-10-04,North Carolina,10,Clemson,38,true,true
+2025-10-04,UAB,13,Army,31,true,true
+2025-10-04,Purdue,27,Illinois,43,true,true
+2025-10-04,Georgia,35,Kentucky,14,true,true
+2025-10-04,Pittsburgh,48,Boston College,7,true,true
+2025-10-04,Cincinnati,38,Iowa State,30,true,true
+2025-10-04,Baylor,35,Kansas State,34,true,true
+2025-10-04,Navy,34,Air Force,31,true,true
+2025-10-04,Ball State,20,Ohio,14,true,true
+2025-10-04,Virginia Tech,23,Wake Forest,30,true,true
+2025-10-04,Temple,27,UTSA,21,true,true
+2025-10-04,NC State,56,Campbell,10,true,false
+2025-10-04,Massachusetts,3,Western Michigan,21,true,true
+2025-10-04,Arizona,41,Oklahoma State,13,true,true
+2025-10-04,Louisville,27,Virginia,30,true,true
+2025-10-04,Northern Illinois,14,Miami (OH),25,true,true
+2025-10-04,Florida,29,Texas,21,true,true
+2025-10-04,SMU,31,Syracuse,18,true,true
+2025-10-04,Buffalo,31,Eastern Michigan,30,true,true
+2025-10-04,UConn,51,Florida International,10,true,true
+2025-10-04,Alabama,30,Vanderbilt,14,true,true
+2025-10-04,Notre Dame,28,Boise State,7,true,true
+2025-10-04,Georgia State,7,James Madison,14,true,true
+2025-10-04,App State,27,Oregon State,23,true,true
+2025-10-04,UCLA,42,Penn State,37,true,true
+2025-10-04,Maryland,20,Washington,24,true,true
+2025-10-04,Northwestern,42,UL Monroe,7,true,true
+2025-10-04,Akron,28,Central Michigan,22,true,true
+2025-10-04,Oklahoma,44,Kent State,0,true,true
+2025-10-04,Arkansas State,31,Texas State,30,true,true
+2025-10-04,Nebraska,38,Michigan State,27,true,true
+2025-10-04,Old Dominion,47,Coastal Carolina,7,true,true
+2025-10-04,Rice,21,Florida Atlantic,27,true,true
+2025-10-04,Houston,11,Texas Tech,35,true,true
+2025-10-04,Wyoming,17,UNLV,31,true,true
+2025-10-04,Troy,31,South Alabama,24,true,true
+2025-10-04,Texas A&M,31,Mississippi State,9,true,true
+2025-10-04,UCF,20,Kansas,27,true,true
+2025-10-04,Florida State,22,Miami,28,true,true
+2025-10-04,TCU,35,Colorado,21,true,true
+2025-10-04,Ohio State,42,Minnesota,3,true,true
+2025-10-05,Memphis,45,Tulsa,7,true,true
+2025-10-05,Fresno State,20,Nevada,17,true,true
+2025-10-05,California,21,Duke,45,true,true
+2025-10-08,Middle Tennessee,20,Missouri State,22,true,true
+2025-10-09,UTEP,8,Liberty,19,true,true
+2025-10-09,Kennesaw State,35,Louisiana Tech,7,true,true
+2025-10-09,Tulane,26,East Carolina,19,true,true
+2025-10-10,Georgia Southern,35,Southern Miss,38,true,true
+2025-10-10,Sam Houston,27,Jacksonville State,29,true,true
+2025-10-10,North Texas,36,South Florida,63,true,true
+2025-10-11,Washington,38,Rutgers,19,true,true
+2025-10-11,Colorado State,49,Fresno State,21,true,true
+2025-10-11,Missouri,24,Alabama,27,true,true
+2025-10-11,Illinois,16,Ohio State,34,true,true
+2025-10-11,Akron,7,Miami (OH),20,true,true
+2025-10-11,Bowling Green,28,Toledo,23,true,true
+2025-10-11,Oklahoma State,17,Houston,39,true,true
+2025-10-11,Michigan State,13,UCLA,38,true,true
+2025-10-11,SMU,34,Stanford,10,true,true
+2025-10-11,Army,24,Charlotte,7,true,true
+2025-10-11,Florida State,31,Pittsburgh,34,true,true
+2025-10-11,James Madison,24,Louisiana,14,true,true
+2025-10-11,Cincinnati,20,UCF,11,true,true
+2025-10-11,Ole Miss,24,Washington State,21,true,true
+2025-10-11,Eastern Michigan,16,Northern Illinois,10,true,true
+2025-10-11,Kent State,42,Massachusetts,6,true,true
+2025-10-11,Oregon,20,Indiana,30,true,true
+2025-10-11,Western Michigan,42,Ball State,0,true,true
+2025-10-11,UNLV,51,Air Force,48,true,true
+2025-10-11,Georgia State,20,App State,41,true,true
+2025-10-11,Maryland,31,Nebraska,34,true,true
+2025-10-11,Texas,23,Oklahoma,6,true,true
+2025-10-11,Marshall,48,Old Dominion,24,true,true
+2025-10-11,Penn State,21,Northwestern,22,true,true
+2025-10-11,Kansas State,41,TCU,28,true,true
+2025-10-11,Georgia Tech,35,Virginia Tech,20,true,true
+2025-10-11,Notre Dame,36,NC State,7,true,true
+2025-10-11,Oregon State,14,Wake Forest,39,true,true
+2025-10-11,Colorado,24,Iowa State,17,true,true
+2025-10-11,Temple,31,Navy,32,true,true
+2025-10-11,Tennessee,34,Arkansas,31,true,true
+2025-10-11,Florida Atlantic,53,UAB,33,true,true
+2025-10-11,Texas A&M,34,Florida,17,true,true
+2025-10-11,Coastal Carolina,23,UL Monroe,8,true,true
+2025-10-11,Wisconsin,0,Iowa,37,true,true
+2025-10-11,Wyoming,35,San José State,28,true,true
+2025-10-11,Auburn,10,Georgia,20,true,true
+2025-10-11,UTSA,61,Rice,13,true,true
+2025-10-11,Texas Tech,42,Kansas,17,true,true
+2025-10-11,Boston College,10,Clemson,41,true,true
+2025-10-11,USC,31,Michigan,13,true,true
+2025-10-11,Minnesota,27,Purdue,20,true,true
+2025-10-11,LSU,20,South Carolina,10,true,true
+2025-10-12,Arizona,27,BYU,33,true,true
+2025-10-12,Texas State,41,Troy,48,true,true
+2025-10-12,Boise State,41,New Mexico,25,true,true
+2025-10-12,Utah,42,Arizona State,10,true,true
+2025-10-12,Nevada,10,San Diego State,44,true,true
+2025-10-12,Hawai'i,44,Utah State,26,true,true
+2025-10-14,Liberty,30,New Mexico State,27,true,true
+2025-10-14,South Alabama,14,Arkansas State,15,true,true
+2025-10-15,Western Kentucky,6,Florida International,25,true,true
+2025-10-15,Jacksonville State,38,Delaware,25,true,true
+2025-10-15,Sam Houston,17,UTEP,35,true,true
+2025-10-16,East Carolina,41,Tulsa,27,true,true
+2025-10-17,Miami,21,Louisville,24,true,true
+2025-10-18,Minnesota,24,Nebraska,6,true,true
+2025-10-18,Utah State,30,San José State,25,true,true
+2025-10-18,California,21,North Carolina,18,true,true
+2025-10-18,Miami (OH),44,Eastern Michigan,30,true,true
+2025-10-18,Boston College,23,UConn,38,true,true
+2025-10-18,Duke,18,Georgia Tech,27,true,true
+2025-10-18,Vanderbilt,31,LSU,24,true,true
+2025-10-18,Bowling Green,6,Central Michigan,27,true,true
+2025-10-18,Tulane,24,Army,17,true,true
+2025-10-18,TCU,42,Baylor,36,true,true
+2025-10-18,Michigan,24,Washington,7,true,true
+2025-10-18,Houston,31,Arizona,28,true,true
+2025-10-18,South Carolina,7,Oklahoma,26,true,true
+2025-10-18,UCF,45,West Virginia,13,true,true
+2025-10-18,Toledo,45,Kent State,10,true,true
+2025-10-18,Massachusetts,21,Buffalo,28,true,true
+2025-10-18,Northwestern,19,Purdue,0,true,true
+2025-10-18,UL Monroe,14,Troy,37,true,true
+2025-10-18,Boise State,56,UNLV,31,true,true
+2025-10-18,Marshall,40,Texas State,37,true,true
+2025-10-18,Clemson,24,SMU,35,true,true
+2025-10-18,Air Force,24,Wyoming,21,true,true
+2025-10-18,Charlotte,14,Temple,49,true,true
+2025-10-18,Arkansas,42,Texas A&M,45,true,true
+2025-10-18,Indiana,38,Michigan State,13,true,true
+2025-10-18,Wisconsin,0,Ohio State,34,true,true
+2025-10-18,James Madison,63,Old Dominion,27,true,true
+2025-10-18,App State,37,Coastal Carolina,45,true,true
+2025-10-18,Ohio,48,Northern Illinois,21,true,true
+2025-10-18,Georgia,43,Ole Miss,35,true,true
+2025-10-18,North Texas,55,UTSA,17,true,true
+2025-10-18,Ball State,42,Akron,28,true,true
+2025-10-18,UAB,31,Memphis,24,true,true
+2025-10-18,Arizona State,26,Texas Tech,22,true,true
+2025-10-18,Florida,23,Mississippi State,21,true,true
+2025-10-18,Louisiana,10,Southern Miss,22,true,true
+2025-10-18,Virginia,22,Washington State,20,true,true
+2025-10-18,Rutgers,10,Oregon,56,true,true
+2025-10-18,Iowa,25,Penn State,24,true,true
+2025-10-18,Kentucky,13,Texas,16,true,true
+2025-10-18,UCLA,20,Maryland,17,true,true
+2025-10-18,Georgia Southern,41,Georgia State,24,true,true
+2025-10-18,Colorado State,19,Hawai'i,31,true,true
+2025-10-18,Syracuse,13,Pittsburgh,30,true,true
+2025-10-18,Alabama,37,Tennessee,20,true,true
+2025-10-18,Notre Dame,34,USC,24,true,true
+2025-10-18,South Florida,48,Florida Atlantic,13,true,true
+2025-10-18,Auburn,17,Missouri,23,true,true
+2025-10-19,Oklahoma State,17,Cincinnati,49,true,true
+2025-10-19,BYU,24,Utah,21,true,true
+2025-10-19,New Mexico,24,Nevada,22,true,true
+2025-10-19,Oregon State,45,Lafayette,13,true,false
+2025-10-19,Stanford,20,Florida State,13,true,true
+2025-10-21,Florida International,26,Kennesaw State,45,true,true
+2025-10-21,Louisiana Tech,27,Western Kentucky,28,true,true
+2025-10-22,Delaware,31,Middle Tennessee,28,true,true
+2025-10-23,New Mexico State,17,Missouri State,24,true,true
+2025-10-23,Georgia State,31,South Alabama,38,true,true
+2025-10-24,Charlotte,20,North Texas,54,true,true
+2025-10-24,Virginia Tech,42,California,34,true,true
+2025-10-25,Nevada,3,Boise State,24,true,true
+2025-10-25,Eastern Michigan,21,Ohio,28,true,true
+2025-10-25,Kent State,24,Bowling Green,21,true,true
+2025-10-25,Old Dominion,24,App State,21,true,true
+2025-10-25,Purdue,24,Rutgers,27,true,true
+2025-10-25,Memphis,34,South Florida,31,true,true
+2025-10-25,Nebraska,28,Northwestern,21,true,true
+2025-10-25,Kansas,17,Kansas State,42,true,true
+2025-10-25,Indiana,56,UCLA,6,true,true
+2025-10-25,Oklahoma,26,Ole Miss,34,true,true
+2025-10-25,North Carolina,16,Virginia,17,true,true
+2025-10-25,Georgia Tech,41,Syracuse,16,true,true
+2025-10-25,Wake Forest,13,SMU,12,true,true
+2025-10-25,Arkansas,24,Auburn,33,true,true
+2025-10-25,Buffalo,16,Akron,24,true,true
+2025-10-25,New Mexico,33,Utah State,14,true,true
+2025-10-25,Rice,37,UConn,34,true,true
+2025-10-25,Pittsburgh,53,NC State,34,true,true
+2025-10-25,Central Michigan,38,Massachusetts,13,true,true
+2025-10-25,Tulsa,37,Temple,38,true,true
+2025-10-25,Miami (OH),26,Western Michigan,17,true,true
+2025-10-25,Fresno State,0,San Diego State,23,true,true
+2025-10-25,Iowa,41,Minnesota,3,true,true
+2025-10-25,Vanderbilt,17,Missouri,10,true,true
+2025-10-25,Southern Miss,49,UL Monroe,21,true,true
+2025-10-25,South Carolina,22,Alabama,29,true,true
+2025-10-25,Washington State,28,Toledo,7,true,true
+2025-10-25,Navy,42,Florida Atlantic,32,true,true
+2025-10-25,Northern Illinois,21,Ball State,7,true,true
+2025-10-25,Washington,42,Illinois,25,true,true
+2025-10-25,Iowa State,27,BYU,41,true,true
+2025-10-25,Texas Tech,42,Oklahoma State,0,true,true
+2025-10-25,Cincinnati,41,Baylor,20,true,true
+2025-10-25,Mississippi State,38,Texas,45,true,true
+2025-10-25,West Virginia,17,TCU,23,true,true
+2025-10-25,Arkansas State,34,Georgia Southern,24,true,true
+2025-10-25,Troy,35,Louisiana,23,true,true
+2025-10-25,Oregon,21,Wisconsin,7,true,true
+2025-10-25,Miami,42,Stanford,7,true,true
+2025-10-25,LSU,25,Texas A&M,49,true,true
+2025-10-25,Wyoming,28,Colorado State,0,true,true
+2025-10-25,Louisville,38,Boston College,24,true,true
+2025-10-25,Michigan State,20,Michigan,31,true,true
+2025-10-25,Kentucky,34,Tennessee,56,true,true
+2025-10-26,Arizona State,16,Houston,24,true,true
+2025-10-26,Utah,53,Colorado,7,true,true
+2025-10-29,Kennesaw State,33,UTEP,20,true,true
+2025-10-29,Texas State,20,James Madison,52,true,true
+2025-10-29,Middle Tennessee,21,Jacksonville State,24,true,true
+2025-10-30,Missouri State,28,Florida International,21,true,true
+2025-10-30,UTSA,48,Tulane,26,true,true
+2025-10-30,Coastal Carolina,44,Marshall,27,true,true
+2025-10-31,Rice,14,Memphis,38,true,true
+2025-10-31,Syracuse,10,North Carolina,27,true,true
+2025-11-01,Louisiana Tech,55,Sam Houston,14,true,true
+2025-11-01,Baylor,30,UCF,3,true,true
+2025-11-01,Houston,35,West Virginia,45,true,true
+2025-11-01,Illinois,35,Rutgers,13,true,true
+2025-11-01,Clemson,45,Duke,46,true,true
+2025-11-01,Texas,34,Vanderbilt,31,true,true
+2025-11-01,North Texas,31,Navy,17,true,true
+2025-11-01,SMU,26,Miami,20,true,true
+2025-11-01,UConn,38,UAB,19,true,true
+2025-11-01,Ohio State,38,Penn State,14,true,true
+2025-11-01,Bowling Green,3,Buffalo,28,true,true
+2025-11-01,Air Force,17,Army,20,true,true
+2025-11-01,Iowa State,19,Arizona State,24,true,true
+2025-11-01,Temple,14,East Carolina,45,true,true
+2025-11-01,UNLV,35,New Mexico,40,true,true
+2025-11-01,Virginia Tech,16,Louisville,28,true,true
+2025-11-01,Boston College,10,Notre Dame,25,true,true
+2025-11-01,Minnesota,23,Michigan State,20,true,true
+2025-11-01,Boise State,7,Fresno State,30,true,true
+2025-11-01,UL Monroe,6,Old Dominion,31,true,true
+2025-11-01,Kansas State,20,Texas Tech,43,true,true
+2025-11-01,South Alabama,22,Louisiana,31,true,true
+2025-11-01,Maryland,10,Indiana,55,true,true
+2025-11-01,Western Kentucky,35,New Mexico State,16,true,true
+2025-11-01,Stanford,20,Pittsburgh,35,true,true
+2025-11-01,Florida,20,Georgia,24,true,true
+2025-11-01,Liberty,59,Delaware,30,true,true
+2025-11-01,California,21,Virginia,31,true,true
+2025-11-01,Kansas,38,Oklahoma State,21,true,true
+2025-11-01,Western Michigan,24,Central Michigan,21,true,true
+2025-11-01,Arkansas,35,Mississippi State,38,true,true
+2025-11-01,Ole Miss,30,South Carolina,14,true,true
+2025-11-01,Colorado,17,Arizona,52,true,true
+2025-11-01,Michigan,21,Purdue,16,true,true
+2025-11-01,San Diego State,24,Wyoming,7,true,true
+2025-11-01,Nebraska,17,USC,21,true,true
+2025-11-01,Florida State,42,Wake Forest,7,true,true
+2025-11-01,Auburn,3,Kentucky,10,true,true
+2025-11-01,NC State,48,Georgia Tech,36,true,true
+2025-11-01,Oregon State,10,Washington State,7,true,true
+2025-11-01,Tennessee,27,Oklahoma,33,true,true
+2025-11-02,Troy,10,Arkansas State,23,true,true
+2025-11-02,Utah,45,Cincinnati,14,true,true
+2025-11-02,San José State,45,Hawai'i,38,true,true
+2025-11-05,Ohio,24,Miami (OH),20,true,true
+2025-11-05,Akron,44,Massachusetts,10,true,true
+2025-11-06,Ball State,17,Kent State,13,true,true
+2025-11-06,Toledo,42,Northern Illinois,3,true,true
+2025-11-07,South Florida,55,UTSA,23,true,true
+2025-11-07,App State,23,Georgia Southern,25,true,true
+2025-11-08,UCF,27,Houston,30,true,true
+2025-11-08,Memphis,32,Tulane,38,true,true
+2025-11-08,USC,38,Northwestern,17,true,true
+2025-11-08,Army,14,Temple,13,true,true
+2025-11-08,Marshall,23,James Madison,35,true,true
+2025-11-08,Arkansas State,21,Southern Miss,27,true,true
+2025-11-08,Mississippi State,21,Georgia,41,true,true
+2025-11-08,Penn State,24,Indiana,27,true,true
+2025-11-08,Texas Tech,29,BYU,7,true,true
+2025-11-08,West Virginia,29,Colorado,22,true,true
+2025-11-08,Boston College,13,SMU,45,true,true
+2025-11-08,Ole Miss,49,The Citadel,0,true,false
+2025-11-08,Liberty,17,Missouri State,21,true,true
+2025-11-08,Purdue,10,Ohio State,34,true,true
+2025-11-08,Eastern Michigan,27,Bowling Green,21,true,true
+2025-11-08,Rice,24,UAB,17,true,true
+2025-11-08,Rutgers,35,Maryland,20,true,true
+2025-11-08,Delaware,25,Louisiana Tech,24,true,true
+2025-11-08,East Carolina,48,Charlotte,22,true,true
+2025-11-08,Middle Tennessee,30,Florida International,56,true,true
+2025-11-08,UTEP,27,Jacksonville State,30,true,true
+2025-11-08,Florida Atlantic,40,Tulsa,21,true,true
+2025-11-08,Arizona,24,Kansas,20,true,true
+2025-11-08,Missouri,17,Texas A&M,38,true,true
+2025-11-08,TCU,17,Iowa State,20,true,true
+2025-11-08,Iowa,16,Oregon,18,true,true
+2025-11-08,UConn,37,Duke,34,true,true
+2025-11-08,Miami,38,Syracuse,10,true,true
+2025-11-08,New Mexico State,21,Kennesaw State,24,true,true
+2025-11-08,Vanderbilt,45,Auburn,38,true,true
+2025-11-08,Coastal Carolina,40,Georgia State,27,true,true
+2025-11-08,Wisconsin,13,Washington,10,true,true
+2025-11-08,North Carolina,20,Stanford,15,true,true
+2025-11-08,Louisiana,42,Texas State,39,true,true
+2025-11-08,San José State,16,Air Force,26,true,true
+2025-11-09,Virginia,9,Wake Forest,16,true,true
+2025-11-09,Louisville,26,California,29,true,true
+2025-11-09,Clemson,24,Florida State,10,true,true
+2025-11-09,Notre Dame,49,Navy,10,true,true
+2025-11-09,Alabama,20,LSU,9,true,true
+2025-11-09,Kentucky,38,Florida,7,true,true
+2025-11-09,Utah State,51,Nevada,14,true,true
+2025-11-09,UCLA,21,Nebraska,28,true,true
+2025-11-09,Colorado State,10,UNLV,42,true,true
+2025-11-09,Oregon State,17,Sam Houston,21,true,true
+2025-11-09,Hawai'i,38,San Diego State,6,true,true
+2025-11-12,Akron,35,Kent State,42,true,true
+2025-11-12,Western Michigan,17,Ohio,13,true,true
+2025-11-13,Massachusetts,3,Northern Illinois,45,true,true
+2025-11-13,Miami (OH),3,Toledo,24,true,true
+2025-11-13,Central Michigan,38,Buffalo,19,true,true
+2025-11-14,Old Dominion,33,Troy,0,true,true
+2025-11-15,Louisville,19,Clemson,20,true,true
+2025-11-15,Oregon,42,Minnesota,13,true,true
+2025-11-15,Northwestern,22,Michigan,24,true,true
+2025-11-15,Oklahoma State,6,Kansas State,14,true,true
+2025-11-15,Cincinnati,24,Arizona,30,true,true
+2025-11-15,Ball State,9,Eastern Michigan,24,true,true
+2025-11-15,Indiana,31,Wisconsin,7,true,true
+2025-11-15,Charlotte,7,UTSA,28,true,true
+2025-11-15,Texas A&M,31,South Carolina,30,true,true
+2025-11-15,Navy,41,South Florida,38,true,true
+2025-11-15,UConn,26,Air Force,16,true,true
+2025-11-15,Pittsburgh,15,Notre Dame,37,true,true
+2025-11-15,LSU,23,Arkansas,22,true,true
+2025-11-15,Tulsa,31,Oregon State,14,true,true
+2025-11-15,Arizona State,25,West Virginia,23,true,true
+2025-11-15,Kentucky,42,Tennessee Tech,10,true,false
+2025-11-15,Georgia State,18,Marshall,30,true,true
+2025-11-15,UAB,24,North Texas,53,true,true
+2025-11-15,New Mexico,20,Colorado State,17,true,true
+2025-11-15,Missouri State,38,UTEP,24,true,true
+2025-11-15,Western Kentucky,42,Middle Tennessee,26,true,true
+2025-11-15,UL Monroe,14,South Alabama,26,true,true
+2025-11-15,Duke,17,Virginia,34,true,true
+2025-11-15,Miami,41,NC State,7,true,true
+2025-11-15,Michigan State,10,Penn State,28,true,true
+2025-11-15,Nevada,55,San José State,10,true,true
+2025-11-15,Boston College,34,Georgia Tech,36,true,true
+2025-11-15,Texas Tech,48,UCF,9,true,true
+2025-11-15,James Madison,58,App State,10,true,true
+2025-11-15,Southern Miss,14,Texas State,41,true,true
+2025-11-15,Illinois,24,Maryland,6,true,true
+2025-11-15,USC,26,Iowa,21,true,true
+2025-11-15,Alabama,21,Oklahoma,23,true,true
+2025-11-15,East Carolina,31,Memphis,27,true,true
+2025-11-15,Tulane,35,Florida Atlantic,24,true,true
+2025-11-15,Tennessee,42,New Mexico State,9,true,true
+2025-11-15,Wake Forest,28,North Carolina,12,true,true
+2025-11-15,Florida International,34,Liberty,27,true,true
+2025-11-15,Georgia Southern,45,Coastal Carolina,40,true,true
+2025-11-16,Baylor,28,Utah,55,true,true
+2025-11-16,Washington,49,Purdue,13,true,true
+2025-11-16,UNLV,29,Utah State,26,true,true
+2025-11-16,Sam Houston,26,Delaware,23,true,true
+2025-11-16,Ole Miss,34,Florida,24,true,true
+2025-11-16,Ohio State,48,UCLA,10,true,true
+2025-11-16,Georgia,35,Texas,10,true,true
+2025-11-16,Florida State,34,Virginia Tech,14,true,true
+2025-11-16,Missouri,49,Mississippi State,27,true,true
+2025-11-16,Jacksonville State,35,Kennesaw State,26,true,true
+2025-11-16,Washington State,28,Louisiana Tech,3,true,true
+2025-11-16,BYU,44,TCU,13,true,true
+2025-11-16,Fresno State,24,Wyoming,3,true,true
+2025-11-16,San Diego State,17,Boise State,7,true,true
+2025-11-19,Northern Illinois,19,Western Michigan,35,true,true
+2025-11-19,Ohio,42,Massachusetts,14,true,true
+2025-11-19,Bowling Green,16,Akron,19,true,true
+2025-11-20,Buffalo,20,Miami (OH),37,true,true
+2025-11-20,Kent State,16,Central Michigan,28,true,true
+2025-11-21,Arkansas State,30,Louisiana,34,true,true
+2025-11-22,NC State,21,Florida State,11,true,true
+2025-11-22,UNLV,38,Hawai'i,10,true,true
+2025-11-22,Texas A&M,48,Samford,0,true,false
+2025-11-22,Iowa State,38,Kansas,14,true,true
+2025-11-22,Oklahoma,17,Missouri,6,true,true
+2025-11-22,Army,25,Tulsa,26,true,true
+2025-11-22,Wake Forest,52,Delaware,14,true,true
+2025-11-22,Northwestern,38,Minnesota,35,true,true
+2025-11-22,Ohio State,42,Rutgers,9,true,true
+2025-11-22,Virginia Tech,17,Miami,34,true,true
+2025-11-22,SMU,38,Louisville,6,true,true
+2025-11-22,Georgia,35,Charlotte,3,true,true
+2025-11-22,Arizona,41,Baylor,17,true,true
+2025-11-22,James Madison,24,Washington State,20,true,true
+2025-11-22,Georgia Southern,10,Old Dominion,45,true,true
+2025-11-22,Alabama,56,Eastern Illinois,0,true,false
+2025-11-22,Kennesaw State,41,Missouri State,34,true,true
+2025-11-22,Toledo,38,Ball State,9,true,true
+2025-11-22,Auburn,62,Mercer,17,true,false
+2025-11-22,Wyoming,7,Nevada,13,true,true
+2025-11-22,App State,26,Marshall,24,true,true
+2025-11-22,Louisiana Tech,34,Liberty,28,true,true
+2025-11-22,Florida Atlantic,45,UConn,48,true,true
+2025-11-22,UAB,18,South Florida,48,true,true
+2025-11-22,UTEP,31,New Mexico State,34,true,true
+2025-11-22,Middle Tennessee,31,Sam Houston,17,true,true
+2025-11-22,Vanderbilt,45,Kentucky,17,true,true
+2025-11-22,North Carolina,25,Duke,32,true,true
+2025-11-22,Florida International,27,Jacksonville State,21,true,true
+2025-11-22,Notre Dame,70,Syracuse,7,true,true
+2025-11-22,Oregon,42,USC,27,true,true
+2025-11-22,UTSA,58,East Carolina,24,true,true
+2025-11-22,Iowa,20,Michigan State,17,true,true
+2025-11-22,Texas,52,Arkansas,37,true,true
+2025-11-22,South Alabama,42,Southern Miss,35,true,true
+2025-11-22,Temple,13,Tulane,37,true,true
+2025-11-22,Houston,14,TCU,17,true,true
+2025-11-22,Maryland,20,Michigan,45,true,true
+2025-11-22,UCF,17,Oklahoma State,14,true,true
+2025-11-22,Utah,51,Kansas State,47,true,true
+2025-11-22,Troy,31,Georgia State,19,true,true
+2025-11-22,South Carolina,51,Coastal Carolina,7,true,true
+2025-11-22,Clemson,45,Furman,10,true,false
+2025-11-22,Texas State,31,UL Monroe,14,true,true
+2025-11-23,Air Force,3,New Mexico,20,true,true
+2025-11-23,Georgia Tech,28,Pittsburgh,42,true,true
+2025-11-23,Penn State,37,Nebraska,10,true,true
+2025-11-23,Boise State,49,Colorado State,21,true,true
+2025-11-23,Stanford,31,California,10,true,true
+2025-11-23,Florida,11,Tennessee,31,true,true
+2025-11-23,Rice,24,North Texas,56,true,true
+2025-11-23,Wisconsin,27,Illinois,10,true,true
+2025-11-23,LSU,13,Western Kentucky,10,true,true
+2025-11-23,Cincinnati,14,BYU,26,true,true
+2025-11-23,Colorado,17,Arizona State,42,true,true
+2025-11-23,Fresno State,17,Utah State,28,true,true
+2025-11-23,UCLA,14,Washington,48,true,true
+2025-11-23,San Diego State,25,San José State,3,true,true
+2025-11-25,Massachusetts,14,Bowling Green,45,true,true
+2025-11-26,Eastern Michigan,21,Western Michigan,31,true,true
+2025-11-28,Memphis,17,Navy,28,true,true
+2025-11-28,Mississippi State,19,Ole Miss,38,true,true
+2025-11-28,Buffalo,26,Ohio,31,true,true
+2025-11-28,Nebraska,16,Iowa,40,true,true
+2025-11-28,Kansas,21,Utah,31,true,true
+2025-11-28,Northern Illinois,31,Kent State,35,true,true
+2025-11-28,Colorado State,21,Air Force,42,true,true
+2025-11-28,Georgia Tech,9,Georgia,16,true,true
+2025-11-28,New Mexico,23,San Diego State,17,true,true
+2025-11-28,North Texas,52,Temple,25,true,true
+2025-11-28,Utah State,24,Boise State,25,true,true
+2025-11-29,Purdue,3,Indiana,56,true,true
+2025-11-29,Texas,27,Texas A&M,17,true,true
+2025-11-29,Arizona State,7,Arizona,23,true,true
+2025-11-29,Baylor,24,Houston,31,true,true
+2025-11-29,West Virginia,0,Texas Tech,49,true,true
+2025-11-29,Louisville,41,Kentucky,0,true,true
+2025-11-29,Michigan,9,Ohio State,27,true,true
+2025-11-29,South Carolina,14,Clemson,28,true,true
+2025-11-29,Florida Atlantic,3,East Carolina,42,true,true
+2025-11-29,Central Michigan,3,Toledo,21,true,true
+2025-11-29,Miami (OH),45,Ball State,24,true,true
+2025-11-29,Kansas State,24,Colorado,14,true,true
+2025-11-29,Oklahoma State,13,Iowa State,20,true,true
+2025-11-29,Pittsburgh,7,Miami,38,true,true
+2025-11-29,Delaware,61,UTEP,31,true,true
+2025-11-29,BYU,41,UCF,21,true,true
+2025-11-29,Sam Houston,16,Florida International,56,true,true
+2025-11-29,Marshall,19,Georgia Southern,24,true,true
+2025-11-29,Old Dominion,27,Georgia State,10,true,true
+2025-11-29,Jacksonville State,37,Western Kentucky,34,true,true
+2025-11-29,Missouri State,30,Louisiana Tech,42,true,true
+2025-11-29,App State,29,Arkansas State,30,true,true
+2025-11-29,Texas State,49,South Alabama,26,true,true
+2025-11-29,Tulsa,24,UAB,31,true,true
+2025-11-29,New Mexico State,24,Middle Tennessee,31,true,true
+2025-11-29,Syracuse,12,Boston College,34,true,true
+2025-11-29,Louisiana,30,UL Monroe,27,true,true
+2025-11-29,Southern Miss,18,Troy,28,true,true
+2025-11-29,Minnesota,17,Wisconsin,7,true,true
+2025-11-29,Liberty,42,Kennesaw State,48,true,true
+2025-11-29,Tennessee,24,Vanderbilt,45,true,true
+2025-11-29,Oklahoma,17,LSU,13,true,true
+2025-11-29,UTSA,24,Army,27,true,true
+2025-11-29,Duke,49,Wake Forest,32,true,true
+2025-11-29,Washington,14,Oregon,26,true,true
+2025-11-29,Arkansas,17,Missouri,31,true,true
+2025-11-29,TCU,45,Cincinnati,23,true,true
+2025-11-29,Rutgers,36,Penn State,40,true,true
+2025-11-29,Coastal Carolina,10,James Madison,59,true,true
+2025-11-29,Florida,40,Florida State,21,true,true
+2025-11-29,Washington State,32,Oregon State,8,true,true
+2025-11-30,Virginia,27,Virginia Tech,7,true,true
+2025-11-30,Michigan State,38,Maryland,28,true,true
+2025-11-30,South Florida,52,Rice,3,true,true
+2025-11-30,USC,29,UCLA,10,true,true
+2025-11-30,Tulane,27,Charlotte,0,true,true
+2025-11-30,Illinois,20,Northwestern,13,true,true
+2025-11-30,NC State,42,North Carolina,19,true,true
+2025-11-30,Auburn,20,Alabama,27,true,true
+2025-11-30,California,38,SMU,35,true,true
+2025-11-30,Nevada,17,UNLV,42,true,true
+2025-11-30,San José State,14,Fresno State,41,true,true
+2025-11-30,Stanford,20,Notre Dame,49,true,true
+2025-11-30,Hawai'i,27,Wyoming,7,true,true
+2025-12-06,Jacksonville State,15,Kennesaw State,19,true,true
+2025-12-06,James Madison,31,Troy,14,true,true
+2025-12-06,Boise State,38,UNLV,21,true,true
+2025-12-06,Tulane,34,North Texas,21,true,true
+2025-12-06,Western Michigan,23,Miami (OH),13,true,true
+2025-12-06,Texas Tech,34,BYU,7,true,true
+2025-12-06,Alabama,7,Georgia,28,true,true
+2025-12-07,Ohio State,10,Indiana,13,true,true
+2025-12-07,Virginia,20,Duke,27,true,true
+2025-12-13,Navy,17,Army,16,true,true
+2025-12-14,Washington,38,Boise State,10,true,true
+2025-12-17,Jacksonville State,17,Troy,13,true,true
+2025-12-17,South Florida,10,Old Dominion,24,true,true
+2025-12-18,Delaware,20,Louisiana,13,true,true
+2025-12-19,Arkansas State,34,Missouri State,28,true,true
+2025-12-19,Western Michigan,41,Kennesaw State,6,true,true
+2025-12-19,NC State,31,Memphis,7,true,true
+2025-12-20,Oklahoma,24,Alabama,34,true,true
+2025-12-20,Texas A&M,3,Miami,10,true,true
+2025-12-20,Ole Miss,41,Tulane,10,true,true
+2025-12-21,Oregon,51,James Madison,34,true,true
+2025-12-22,Utah State,21,Washington State,34,true,true
+2025-12-23,Louisville,27,Toledo,22,true,true
+2025-12-23,Southern Miss,16,Western Kentucky,27,true,true
+2025-12-24,Ohio,17,UNLV,10,true,true
+2025-12-25,Hawai'i,35,California,31,true,true
+2025-12-26,Northwestern,34,Central Michigan,7,true,true
+2025-12-26,Minnesota,20,New Mexico,17,true,true
+2025-12-27,UTSA,57,Florida International,20,true,true
+2025-12-27,East Carolina,23,Pittsburgh,17,true,true
+2025-12-27,Clemson,10,Penn State,22,true,true
+2025-12-27,Army,41,UConn,16,true,true
+2025-12-27,BYU,25,Georgia Tech,21,true,true
+2025-12-27,Fresno State,18,Miami (OH),3,true,true
+2025-12-27,San Diego State,47,North Texas,49,true,true
+2025-12-28,Missouri,7,Virginia,13,true,true
+2025-12-28,Houston,38,LSU,35,true,true
+2025-12-29,App State,10,Georgia Southern,29,true,true
+2025-12-30,Louisiana Tech,23,Coastal Carolina,14,true,true
+2025-12-30,Illinois,30,Tennessee,28,true,true
+2025-12-31,TCU,30,USC,27,true,true
+2025-12-31,Vanderbilt,27,Iowa,34,true,true
+2025-12-31,Duke,42,Arizona State,39,true,true
+2025-12-31,Texas,41,Michigan,27,true,true
+2025-12-31,Utah,44,Nebraska,22,true,true
+2026-01-01,Ohio State,14,Miami,24,true,true
+2026-01-01,Texas Tech,0,Oregon,23,true,true
+2026-01-01,Indiana,38,Alabama,3,true,true
+2026-01-02,Georgia,34,Ole Miss,39,true,true
+2026-01-02,Texas State,41,Rice,10,true,true
+2026-01-02,Cincinnati,13,Navy,35,true,true
+2026-01-03,SMU,24,Arizona,19,true,true
+2026-01-03,Mississippi State,29,Wake Forest,43,true,true
+2026-01-09,Ole Miss,27,Miami,31,true,true
+2026-01-10,Indiana,56,Oregon,22,true,true
+2026-01-20,Indiana,27,Miami,21,true,true

@@ -202,6 +202,61 @@ the API; it never writes anything back.
 
 ---
 
+## Regular season or postseason
+
+`--season-type` takes `regular` (the default), `postseason`, or `both`.
+Conference championship games are part of the regular season as CFBD files
+them, so `regular` already runs through Army-Navy; `both` adds the bowls and
+the playoff.  This repository carries each season in both forms —
+`games_2024.csv` and `games_2024_both.csv` — because the choice is a question
+about what the ranking is *for*, not one the data settles.
+
+The postseason is about 45 games against 900, but its effect is larger than
+that suggests, because bowls are cross-conference edges and the graph is short
+of those:
+
+| season | games added | pairs promoted out of strength 0 | via a new shared opponent | because the two played |
+|---|---|---|---|---|
+| 2022 | 42 | 107 | 48 | 43 |
+| 2023 | 42 | 104 | 48 | 43 |
+| 2024 | 46 | 151 | 64 | 47 |
+| 2025 | 46 | 120 | 56 | 40 |
+
+Every season shows the same two things.  **The multiplier is 2.5 to 3.3** — a
+bowl game settles its own pair and then ripples outward — and **the ripple is
+the larger half**: more pairs gain a shared opponent than actually play.  The
+share of pairs still reaching strength 0 falls by about one point (88.9% to
+87.9% in 2022, similarly elsewhere), so the structure barely moves.
+
+**Where it lands is the opposite of what you would guess.**  The top 10 is the
+most stable part of the ranking in all four seasons — 6 to 9 teams move, mean
+shift 2.0 to 6.6 — while 45 to 50 teams move in the 51-100 band every year.
+Those teams sit at strength 0 relative to almost everyone, so one bowl game is
+an enormous relative addition to their evidence.  Teams that played no bowl at
+all move too: in 2024 Kansas finished 5-7, played nothing in December, and rose
+68 to 33 because other teams' games reordered what it could be compared to.
+
+Postseason games mainly change **who is comparable to whom**, not who is good.
+
+On whether the champion finishes first:
+
+| season | champion | regular season | with postseason |
+|---|---|---|---|
+| 2022 | Georgia | #1 (13-0) | #1 (15-0) |
+| 2023 | Michigan | #1 (13-0) | #1 (15-0) |
+| 2024 | Ohio State | #4 (10-2) | #2 (14-2) |
+| 2025 | Indiana | #1 (13-0) | #1 (16-0) |
+
+Three of four, and in each of those the champion was undefeated, so the group
+tiers had already settled it.  2024 is the case worth understanding: Ohio State
+went 10-2, won four playoff games including beating Oregon 41-21, and still
+finishes behind Oregon's 13-0 regular season.  A bowl result is strength 2, and
+Oregon's place was fixed by a 4-team group whose verdicts outrank it.  That is
+the tier hierarchy working as designed — "best season" and "best team in
+January" are different questions, and this system answers the first.
+
+---
+
 ## Unranked opponents
 
 An FBS schedule usually includes one FCS opponent.  Those games are loaded, but
@@ -630,6 +685,55 @@ differential decide", not "declare more ties".
 
 ---
 
+### Does any of this predict anything?
+
+Every tuning decision above is judged on *record inversions*, which measures
+whether a finished ranking looks defensible.  It says nothing about whether the
+ranking knows anything.  The postseason gives a held-out test: rank on the
+regular season only, then ask how often the higher-ranked team won its bowl.
+
+Across 2022-2025, 176 postseason games between two ranked teams:
+
+| predictor | decided | accuracy (95% CI) |
+|---|---|---|
+| **this ranking** | 176 | **50.0%  ±7.4** |
+| the blend alone | 176 | 51.1%  ±7.4 |
+| better overall record | 135 | 51.1%  ±8.4 |
+| better overall point differential | 174 | 58.6%  ±7.3 |
+| the home team | 176 | 55.1%  ±7.3 |
+
+**The ranking is a coin flip out of sample** — 88 of 176 — and so is the record,
+and so is the blend.  Only point differential clears chance, and only barely.
+
+Two things make bowls hard.  They are *matched by quality*: the mean rank gap
+in a postseason matchup is 20 where random pairs from a 134-team field would
+average about 45.  And an ordering is not a rating — ranked pairs can say one
+team finishes below another but never by how much, which is exactly the
+information a forecast needs.
+
+Failing this test is not proof the ranking is wrong for its purpose.  It does
+mean the differences the tuning above measures — a percent here, six percent
+there — are far inside the noise of anything predictive.  Both metrics are in
+the repository because they answer different questions and should not be
+confused for each other.
+
+**Point differential's edge does not transfer into the ranking.**
+`STRENGTH_ZERO_ORDER = "point_diff"` makes margin decide before the blend at
+strength 0.  It reshuffles a great deal — 95 to 122 teams move each season, and
+20 to 25 of the top 25 positions differ — costs 5% to 20% more record
+inversions, and predicts the postseason *identically*: only 8 of 176 pairs
+change direction and they cancel exactly, 4 gained against 4 lost.
+
+The reason is the tier hierarchy.  The ranker is mostly not its strength-0
+tier: group verdicts and their transitive chains settle roughly three quarters
+of pairs and lock in first, so promoting margin inside the weakest tier barely
+touches the pairs bowls actually match up.  Capturing that predictive edge
+would mean letting margin override results on the field, which is the one thing
+this system is built not to do.  The cost of that choice is visible here; it is
+not an argument against it.
+
+---
+
 **The blend can never reorder teams a group or common opponents settled.**
 Strength 0 is the last tier consulted, and ranked pairs locks stronger
 verdicts first, so a blend verdict is discarded whenever it contradicts one.
@@ -799,7 +903,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-212 tests cover:
+217 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -839,6 +943,8 @@ of this file shows the latest result.
   opposition — while the final order does not move, because chained 2-clique
   verdicts already separate the two and outrank anything the blend says
 - The shipped defaults themselves, so a weighting cannot drift unnoticed
+- `STRENGTH_ZERO_ORDER`: each order reporting its own deciding margin, the two
+  disagreeing where they should, and neither reaching above strength 0
 - `BLEND_EPSILON`: a gap above it deciding, a gap below it handing over to
   point differential, equal scores on both counting as a genuine tie, and no
   width of threshold reaching above strength 0

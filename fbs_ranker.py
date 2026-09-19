@@ -148,6 +148,11 @@ class FBSRoundRobinRanker:
     # field.  Set to 0 to let any difference at all decide.
     BLEND_EPSILON = 0.001
 
+    # Which of the two strength-0 signals decides first: "blend" (the default)
+    # compares the opponent-weighted score and falls through to overall point
+    # differential; "point_diff" reverses that.  See the README.
+    STRENGTH_ZERO_ORDER = "blend"
+
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a
     #: 1-1 record with points from both games; "error" refuses the dataset;
@@ -676,12 +681,20 @@ class FBSRoundRobinRanker:
         diff_a = opf_a - opa_a
         diff_b = opf_b - opa_b
 
-        if abs(wpc_a - wpc_b) > self.BLEND_EPSILON:
-            strength = (0, abs(wpc_a - wpc_b), abs(diff_a - diff_b))
-            return (-1 if wpc_a > wpc_b else 1), strength
+        if self.STRENGTH_ZERO_ORDER == "point_diff":
+            if diff_a != diff_b:
+                return ((-1 if diff_a > diff_b else 1),
+                        (0, abs(diff_a - diff_b), abs(wpc_a - wpc_b)))
+            if abs(wpc_a - wpc_b) > self.BLEND_EPSILON:
+                return ((-1 if wpc_a > wpc_b else 1),
+                        (0, 0.0, abs(wpc_a - wpc_b)))
+        else:
+            if abs(wpc_a - wpc_b) > self.BLEND_EPSILON:
+                strength = (0, abs(wpc_a - wpc_b), abs(diff_a - diff_b))
+                return (-1 if wpc_a > wpc_b else 1), strength
 
-        if diff_a != diff_b:
-            return (-1 if diff_a > diff_b else 1), (0, 0.0, abs(diff_a - diff_b))
+            if diff_a != diff_b:
+                return (-1 if diff_a > diff_b else 1), (0, 0.0, abs(diff_a - diff_b))
 
         # Nothing distinguishes them.  Report a tie rather than inventing an
         # ordering from the team names; rank() will give them the same rank.
