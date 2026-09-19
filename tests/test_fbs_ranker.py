@@ -1702,6 +1702,67 @@ class TestBlendEpsilon(unittest.TestCase):
                              f"group order changed at epsilon={epsilon}")
 
 
+class TestStrengthZeroOrder(unittest.TestCase):
+    """Which of the two strength-0 signals decides first.
+
+    The default compares the blended score and falls through to overall point
+    differential.  "point_diff" reverses that.  Measured on 2022-2025 the
+    reversal costs 5% to 20% more record inversions and predicts held-out
+    postseason games exactly as well (identically, in fact: only 8 of 176
+    pairs change direction and they cancel), so the default stays.
+    """
+
+    def _pair(self, order):
+        """X has the better blend; Y has far the better point differential."""
+        r = FBSRoundRobinRanker()
+        r.STRENGTH_ZERO_ORDER = order
+        r.add_game("X", "Xo", 20, 17)      # X wins by 3
+        r.add_game("X", "Xp", 20, 17)
+        r.add_game("Y", "Yo", 70, 0)       # Y wins by 70
+        r.add_game("Yo", "Y", 24, 21)      # and loses one, to keep records level
+        return r
+
+    def _cliques(self, ranker):
+        import networkx as nx
+        g = nx.Graph()
+        g.add_nodes_from(ranker.teams)
+        for ta, tb in ranker._game_map:
+            g.add_edge(ta, tb)
+        return list(nx.find_cliques(g))
+
+    def test_default_is_blend_first(self):
+        self.assertEqual(FBSRoundRobinRanker.STRENGTH_ZERO_ORDER, "blend")
+
+    def test_blend_first_reports_the_blend_gap_as_the_margin(self):
+        r = self._pair("blend")
+        cmp, strength = r._pairwise_compare("X", "Y", self._cliques(r))
+        self.assertEqual(strength[0], 0)
+        self.assertGreater(strength[1], 0.0,
+                           "the blend gap should be the deciding margin")
+
+    def test_point_diff_first_reports_the_point_gap_as_the_margin(self):
+        r = self._pair("point_diff")
+        cmp, strength = r._pairwise_compare("X", "Y", self._cliques(r))
+        self.assertEqual(strength[0], 0)
+        self.assertGreater(strength[1], 1.0,
+                           "the point-differential gap should be the margin")
+
+    def test_the_two_orders_can_disagree(self):
+        a = self._pair("blend")
+        b = self._pair("point_diff")
+        ca, _ = a._pairwise_compare("X", "Y", self._cliques(a))
+        cb, _ = b._pairwise_compare("X", "Y", self._cliques(b))
+        self.assertNotEqual(ca, cb, "the fixture should separate the two orders")
+
+    def test_neither_order_reaches_above_strength_zero(self):
+        for order in ("blend", "point_diff"):
+            r = make_ranker(("G1", "G2", 17, 14), ("G1", "G3", 20, 0),
+                            ("G2", "G3", 30, 10))
+            r.STRENGTH_ZERO_ORDER = order
+            self.assertEqual(ranked_names(r.rank()), ["G1", "G2", "G3"],
+                             f"group order changed under {order}")
+
+
 class TestDefaultWeights(unittest.TestCase):
     """The shipped defaults are a deliberate choice, so pin them."""
 

@@ -685,6 +685,55 @@ differential decide", not "declare more ties".
 
 ---
 
+### Does any of this predict anything?
+
+Every tuning decision above is judged on *record inversions*, which measures
+whether a finished ranking looks defensible.  It says nothing about whether the
+ranking knows anything.  The postseason gives a held-out test: rank on the
+regular season only, then ask how often the higher-ranked team won its bowl.
+
+Across 2022-2025, 176 postseason games between two ranked teams:
+
+| predictor | decided | accuracy (95% CI) |
+|---|---|---|
+| **this ranking** | 176 | **50.0%  ±7.4** |
+| the blend alone | 176 | 51.1%  ±7.4 |
+| better overall record | 135 | 51.1%  ±8.4 |
+| better overall point differential | 174 | 58.6%  ±7.3 |
+| the home team | 176 | 55.1%  ±7.3 |
+
+**The ranking is a coin flip out of sample** — 88 of 176 — and so is the record,
+and so is the blend.  Only point differential clears chance, and only barely.
+
+Two things make bowls hard.  They are *matched by quality*: the mean rank gap
+in a postseason matchup is 20 where random pairs from a 134-team field would
+average about 45.  And an ordering is not a rating — ranked pairs can say one
+team finishes below another but never by how much, which is exactly the
+information a forecast needs.
+
+Failing this test is not proof the ranking is wrong for its purpose.  It does
+mean the differences the tuning above measures — a percent here, six percent
+there — are far inside the noise of anything predictive.  Both metrics are in
+the repository because they answer different questions and should not be
+confused for each other.
+
+**Point differential's edge does not transfer into the ranking.**
+`STRENGTH_ZERO_ORDER = "point_diff"` makes margin decide before the blend at
+strength 0.  It reshuffles a great deal — 95 to 122 teams move each season, and
+20 to 25 of the top 25 positions differ — costs 5% to 20% more record
+inversions, and predicts the postseason *identically*: only 8 of 176 pairs
+change direction and they cancel exactly, 4 gained against 4 lost.
+
+The reason is the tier hierarchy.  The ranker is mostly not its strength-0
+tier: group verdicts and their transitive chains settle roughly three quarters
+of pairs and lock in first, so promoting margin inside the weakest tier barely
+touches the pairs bowls actually match up.  Capturing that predictive edge
+would mean letting margin override results on the field, which is the one thing
+this system is built not to do.  The cost of that choice is visible here; it is
+not an argument against it.
+
+---
+
 **The blend can never reorder teams a group or common opponents settled.**
 Strength 0 is the last tier consulted, and ranked pairs locks stronger
 verdicts first, so a blend verdict is discarded whenever it contradicts one.
@@ -854,7 +903,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-212 tests cover:
+217 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -894,6 +943,8 @@ of this file shows the latest result.
   opposition — while the final order does not move, because chained 2-clique
   verdicts already separate the two and outrank anything the blend says
 - The shipped defaults themselves, so a weighting cannot drift unnoticed
+- `STRENGTH_ZERO_ORDER`: each order reporting its own deciding margin, the two
+  disagreeing where they should, and neither reaching above strength 0
 - `BLEND_EPSILON`: a gap above it deciding, a gap below it handing over to
   point differential, equal scores on both counting as a genuine tie, and no
   width of threshold reaching above strength 0
