@@ -1568,6 +1568,53 @@ class TestTeamsWithoutRankedOpponents(unittest.TestCase):
         self.assertIn("Dakota State", ranked_names(r.rank()))
 
 
+class TestRepeatMeetings(unittest.TestCase):
+    """The season-series count spans ranked and unranked games alike.
+
+    It used to be derived as total_games() minus the number of ranked pairs,
+    but those do not cover the same games: the total includes games against
+    unranked opponents, which never become pairs.  On the 2024 season that
+    reported 125 repeat meetings where there were 4.
+    """
+
+    def test_no_rematches_counts_zero(self):
+        r = make_ranker(("A", "B", 30, 10), ("B", "C", 30, 10))
+        self.assertEqual(r.repeat_meetings(), 0)
+
+    def test_a_pair_meeting_twice_counts_one(self):
+        r = make_ranker(("A", "B", 30, 10), ("B", "A", 20, 17))
+        self.assertEqual(r.repeat_meetings(), 1)
+
+    def test_a_pair_meeting_three_times_counts_two(self):
+        r = make_ranker(("A", "B", 30, 10), ("B", "A", 20, 17),
+                        ("A", "B", 24, 21))
+        self.assertEqual(r.repeat_meetings(), 2)
+
+    def test_unranked_opponents_alone_are_not_rematches(self):
+        """The bug: these inflate total_games() without creating pairs."""
+        r = FBSRoundRobinRanker()
+        r.add_game("A", "B", 30, 10)
+        r.add_game("A", "Tarleton State", 20, 27, away_ranked=False)
+        r.add_game("B", "Austin Peay", 30, 10, away_ranked=False)
+        self.assertEqual(r.total_games(), 3)
+        self.assertEqual(r.repeat_meetings(), 0)
+
+    def test_a_repeated_unranked_opponent_does_count(self):
+        r = FBSRoundRobinRanker()
+        r.add_game("A", "B", 30, 10)
+        r.add_game("A", "Tarleton State", 20, 27, away_ranked=False)
+        r.add_game("A", "Tarleton State", 30, 10, away_ranked=False)
+        self.assertEqual(r.repeat_meetings(), 1)
+
+    def test_ranked_and_unranked_rematches_add_up(self):
+        r = FBSRoundRobinRanker()
+        r.add_game("A", "B", 30, 10)
+        r.add_game("B", "A", 20, 17)
+        r.add_game("A", "Tarleton State", 20, 27, away_ranked=False)
+        r.add_game("A", "Tarleton State", 30, 10, away_ranked=False)
+        self.assertEqual(r.repeat_meetings(), 2)
+
+
 class TestDefaultWeights(unittest.TestCase):
     """The shipped defaults are a deliberate choice, so pin them."""
 

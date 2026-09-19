@@ -667,7 +667,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-199 tests cover:
+205 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -720,6 +720,8 @@ of this file shows the latest result.
 - `fetch_games.py`: both of CFBD's field-naming styles, unplayed and non-FBS
   games dropped, rematches found despite reversed sides, and the CSV it writes
   loading into the ranker (the API layer runs against a stub, never the network)
+- Repeat meetings counted across ranked pairs and unranked opponents alike,
+  rather than by subtracting two figures that do not cover the same games
 - `compare_weights.py`: movement between orderings, record inversions at a
   given margin (including a winless team not dividing by zero), the influence
   figures, an undifferentiated field yielding no ratio rather than a huge one,
