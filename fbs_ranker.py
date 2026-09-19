@@ -322,6 +322,21 @@ class FBSRoundRobinRanker:
         return (sum(len(m) for m in self._game_map.values())
                 + sum(len(g) for g in self._unranked_games.values()))
 
+    def repeat_meetings(self) -> int:
+        """Extra games beyond one per pair — the size of the season series.
+
+        Counted across ranked pairs AND games against unranked opponents, so
+        it cannot be derived by subtracting the ranked-pair count from the
+        total game count: those two do not cover the same games.
+        """
+        ranked = (sum(len(m) for m in self._game_map.values())
+                  - len(self._game_map))
+        unranked = 0
+        for games in self._unranked_games.values():
+            opponents = [opponent for opponent, _, _ in games]
+            unranked += len(opponents) - len(set(opponents))
+        return ranked + unranked
+
     def _record_in_group(self, team: str, group) -> tuple:
         """Return (wins, losses, points_for, points_against) for *team* vs every
         other member of *group*."""
@@ -1068,9 +1083,9 @@ CSV input format:
             print(f"\nError: {exc}", file=sys.stderr)
             sys.exit(1)
 
-    pairs = len(ranker._game_map)
     games = ranker.total_games()
-    extra = f"  |  Repeat meetings: {games - pairs}" if games != pairs else ""
+    repeats = ranker.repeat_meetings()
+    extra = f"  |  Repeat meetings: {repeats}" if repeats else ""
     print(f"Teams: {len(ranker.teams)}  |  Games: {games}{extra}")
 
     if ranker.demoted_opponents:
