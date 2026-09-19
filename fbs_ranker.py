@@ -153,6 +153,17 @@ class FBSRoundRobinRanker:
     # differential; "point_diff" reverses that.  See the README.
     STRENGTH_ZERO_ORDER = "blend"
 
+    # What breaks a tie inside a round-robin group when two members have the
+    # same in-group win percentage.  "point_diff" (the default) uses in-group
+    # point differential; "head_to_head" consults the result between the two
+    # teams first and falls back to point differential when they split.
+    #
+    # Every pair inside a group has played -- that is what a clique means --
+    # so the head-to-head result is always available.  It is NOT transitive,
+    # though: a three-way cycle leaves all three teams 1-1 and pointing at
+    # each other, and no total order can honour all three.  See the README.
+    GROUP_TIEBREAK = "point_diff"
+
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a
     #: 1-1 record with points from both games; "error" refuses the dataset;
@@ -453,13 +464,32 @@ class FBSRoundRobinRanker:
         if wpc_gap > 1e-9:
             return (-1 if wpc_a > wpc_b else 1), wpc_gap, diff_gap
 
-        # Tied on win pct: compare point differential within this group.
-        # (Using point diff avoids the non-transitivity that raw h2h creates
-        # in 3-way cycles; for 2-team groups win pct already encodes h2h.)
+        # Tied on win pct.  Point differential is the default because it is
+        # transitive; head-to-head is not, and in a 3-way cycle no ordering
+        # can satisfy every meeting.  For 2-team groups win pct already
+        # encodes head-to-head, so this only matters in groups of 3 or more.
+        if self.GROUP_TIEBREAK == "head_to_head":
+            direct = self._head_to_head_verdict(team_a, team_b)
+            if direct is not None:
+                return direct, 0.0, diff_gap
+
         if diff_a != diff_b:
             return (-1 if diff_a > diff_b else 1), 0.0, diff_gap
 
         return None
+
+    def _head_to_head_verdict(self, team_a: str, team_b: str):
+        """-1 if team_a won the season series, 1 if team_b did, else None.
+
+        None covers both "never played" and a split series: neither settles
+        anything, so the caller falls through to its next tiebreak.
+        """
+        results = self.get_results(team_a, team_b)
+        wins_a = sum(1 for score_a, score_b in results if score_a > score_b)
+        wins_b = sum(1 for score_a, score_b in results if score_b > score_a)
+        if wins_a == wins_b:
+            return None
+        return -1 if wins_a > wins_b else 1
 
     # ------------------------------------------------------------------
     # Common opponents (strength 1)

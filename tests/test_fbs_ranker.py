@@ -1247,6 +1247,55 @@ class TestCommonOpponentStrength(unittest.TestCase):
         _, strength = r._pairwise_compare("A", "B", self._cliques(r))
         self.assertGreaterEqual(strength[0], 3)
 
+    def test_group_tiebreak_defaults_to_point_differential(self):
+        self.assertEqual(FBSRoundRobinRanker.GROUP_TIEBREAK, "point_diff")
+
+    def test_head_to_head_tiebreak_overrides_point_differential(self):
+        """Tied on in-group win pct, the direct result can decide instead.
+
+        A three-way cycle leaves all three teams 1-1.  Point differential
+        ranks B first (+20) and A last (-29), which contradicts A beating B.
+        With GROUP_TIEBREAK="head_to_head" the meeting decides that pair.
+        """
+        games = (("A", "B", 21, 20), ("B", "C", 21, 0), ("C", "A", 30, 0))
+        base = make_ranker(*games)
+        self.assertEqual(base._verdict_in_group("A", "B", ["A", "B", "C"])[0],
+                         1, "point diff should favour B")
+
+        tie = make_ranker(*games)
+        tie.GROUP_TIEBREAK = "head_to_head"
+        self.assertEqual(tie._verdict_in_group("A", "B", ["A", "B", "C"])[0],
+                         -1, "the meeting should favour A")
+
+    def test_head_to_head_tiebreak_ignores_a_split_series(self):
+        """A split series settles nothing, so point differential still rules."""
+        r = make_ranker(("A", "B", 21, 20), ("B", "A", 30, 0),
+                        ("B", "C", 21, 0), ("C", "A", 30, 0))
+        r.GROUP_TIEBREAK = "head_to_head"
+        self.assertIsNone(r._head_to_head_verdict("A", "B"))
+
+    def test_head_to_head_verdict_reads_the_season_series(self):
+        r = make_ranker(("A", "B", 21, 0), ("B", "A", 3, 0), ("A", "B", 7, 0))
+        self.assertEqual(r._head_to_head_verdict("A", "B"), -1)   # A wins 2-1
+        self.assertEqual(r._head_to_head_verdict("B", "A"), 1)
+        self.assertIsNone(r._head_to_head_verdict("A", "Nobody"))
+
+    def test_the_tiebreak_cannot_reach_a_pair_separated_on_win_pct(self):
+        """It is a TIEbreak: a decided in-group record is never overruled."""
+        r = make_ranker(("A", "B", 21, 20), ("A", "C", 30, 0), ("B", "C", 30, 0))
+        r.GROUP_TIEBREAK = "head_to_head"
+        # A is 2-0 and B is 1-1, so win pct decides before the tiebreak runs.
+        cmp, gap, _ = r._verdict_in_group("A", "B", ["A", "B", "C"])
+        self.assertEqual(cmp, -1)
+        self.assertGreater(gap, 0.0)
+
+    def test_a_two_team_group_is_unaffected_by_the_tiebreak(self):
+        """Win pct already encodes head-to-head when the group IS the game."""
+        for mode in ("point_diff", "head_to_head"):
+            r = make_ranker(("A", "B", 21, 20))
+            r.GROUP_TIEBREAK = mode
+            self.assertEqual(r._verdict_in_group("A", "B", ["A", "B"])[0], -1)
+
     def test_disagreeing_groups_let_a_pair_that_met_fall_through(self):
         """Sharing a group is not the same as that group deciding anything.
 

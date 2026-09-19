@@ -892,6 +892,68 @@ strength-2 verdict**, which is why the reversals cluster in bowls:
 Restricted to the 2025 postseason alone, 8 of 44 decided series are
 contradicted (18.2%) — and 6 of those 8 are this mechanism.
 
+### Would a head-to-head tiebreak fix it?
+
+Partly, and the price is steep.  `GROUP_TIEBREAK = "head_to_head"` consults
+the meeting between two teams before falling back to point differential.  It
+is off by default; these are the measurements that decided that.
+
+**First, the floor.**  A season's results are not a consistent ordering.
+2025 alone contains **91 three-way cycles** — A beat B, B beat C, C beat A —
+and no total order can honour all three.  Searching for the ordering that
+contradicts the fewest results at all gives:
+
+| season | decided | current | head-to-head | floor | 3-cycles |
+|---|---|---|---|---|---|
+| 2022 | 726 | 120 | 105 | **88** | 137 |
+| 2023 | 746 | 111 | 90 | **78** | 115 |
+| 2024 | 746 | 104 | 91 | **74** | 117 |
+| 2025 | 750 | 92 | 74 | **64** | 91 |
+
+**The current ranker is already within about 30 of the best any ordering can
+do.** Only 28-33 contradictions a season are available to remove, and the
+tiebreak takes 13-21 of them — roughly half the headroom.
+
+**What it costs:**
+
+| season | record inversions | teams moved | median shift | max shift | top 25 kept |
+|---|---|---|---|---|---|
+| 2022 | 392 → 741 (**+349**) | 124 | 8 | 100 | 20/25 |
+| 2023 | 503 → 693 (**+190**) | 117 | 8 | 69 | 23/25 |
+| 2024 | 635 → 601 (−34) | 112 | 6 | 76 | 22/25 |
+| 2025 | 617 → 780 (**+163**) | 113 | 12 | 57 | 16/25 |
+
+Record inversions rise sharply in three of four seasons — 2022 nearly doubles
+— and the ranking is heavily reshuffled, with a season's top 25 keeping as few
+as 16 of its 25 members.  So the trade is: **honour about 15 more results,
+look considerably less like the records while doing it.**
+
+**Where the gain actually comes from is the surprise.**  The existing code
+comment justifies point differential as avoiding "the non-transitivity that
+raw head-to-head creates in 3-way cycles."  That is exactly backwards —
+splitting 2025's contradictions by whether a result sits inside a cycle:
+
+| | inside a 3-cycle | outside |
+|---|---|---|
+| current | 71 | 21 |
+| head-to-head | **49** (−22) | 25 (+4) |
+
+Every bit of the improvement is *inside* the cycles, and the tiebreak is
+slightly **worse** outside them.  Any ordering must break at least one result
+per cycle; consulting the meeting breaks closer to that minimum, while point
+differential breaks more than it needs to.  The 2024 and 2022 splits agree
+(−21/+8 and −19/+4).
+
+**Why it stays off by default:** the gain is real but small against a floor
+that can never be reached, and it is paid for in a metric — agreement with
+records — that a reader of the rankings sees immediately.  The knob is here so
+the choice can be re-measured rather than argued:
+
+```bash
+python head_to_head.py games_2025.csv        # 92 contradicted
+# then set GROUP_TIEBREAK = "head_to_head" and re-run: 74
+```
+
 ### A related claim that was also wrong
 
 Two teams that played each other were documented as unable to fall below
