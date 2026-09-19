@@ -741,6 +741,94 @@ verdicts first, so a blend verdict is discarded whenever it contradicts one.
 
 ---
 
+## When a ranking is worth generating
+
+Ordering integrity holds at *every* point in a season — the ranker never
+contradicts a result it has seen, in Week 3 or Week 14.  That is not the same
+as the ranking being worth publishing.  Early on it is mostly expressing the
+prior rather than the season.
+
+`season_progression.py` replays a season week by week, re-ranking from scratch
+on the games played to each Monday.  Averaged over 2022-2025, mapped onto the
+2026 calendar:
+
+| CFB wk | 2026 date | min games | median | evidence % | largest group | tau | churn |
+|---|---|---|---|---|---|---|---|
+| 3 | Sep 21 | 2.0 | 3.0 | 1.7 | 2.8 | 0.443 | 18.6 |
+| 4 | Sep 28 | 3.0 | 4.0 | 2.3 | 3.0 | 0.506 | 15.6 |
+| **5** | **Oct 5** | **4.0** | 4.8 | 3.0 | 3.0 | 0.526 | 12.1 |
+| 7 | Oct 19 | 5.5 | 6.2 | 4.3 | 3.0 | 0.572 | 14.7 |
+| **9** | **Nov 2** | 6.8 | 8.0 | 6.1 | **4.0** | 0.623 | 12.1 |
+| 11 | Nov 16 | 8.8 | 9.5 | 8.1 | 4.5 | 0.674 | 14.4 |
+| 12 | Nov 23 | 9.5 | 10.5 | 9.1 | 5.0 | 0.682 | 14.5 |
+| **13** | **Nov 30** | 10.2 | 11.5 | 10.3 | **7.2** | **0.867** | 13.8 |
+| **14** | **Dec 7** | 10.8 | 12.0 | 11.0 | 8.2 | 0.965 | 6.2 |
+
+"Evidence %" is the share of pairs decided at strength 1 or above — a shared
+round-robin group, or common opponents — rather than by the blend.
+
+**Three thresholds, and they are far apart.**
+
+*Four games is the hard floor,* and it falls out of `PRIOR_GAMES = 4.0`
+directly.  Shrinkage regresses a record toward .500 by four phantom games, so
+a team with `g` games shows `g/(g+4)` of its true spread: 43% at three games,
+50% at four, 67% at eight.  Below four the prior outweighs what happened.
+Every team clears four games by CFB Week 5 in all four seasons.
+
+*But the round-robin machinery does not exist yet.*  Through Week 7 the
+largest group in the graph is **3** — a triangle, the smallest thing that
+technically round-robins.  Groups of four first appear in Week 8 or 9.  Before
+November, 95%+ of pairs fall through to the blend, which makes a Week 5
+ranking a shrunken win-percentage list with a round-robin ornament on it.
+
+*The real threshold is Week 13,* and it is a discontinuity rather than a
+slope: rivalry weekend closes the conference round-robins, the largest group
+jumps from 5.0 to 7.2, and evidence reaches ~90% of its season-end value.
+
+**Two caveats that cut against reading the table optimistically.**
+
+The `tau` column flatters late weeks, because Week 14 scores well partly by
+*being* nearly the final data.  The honest real-time signal is `churn` — mean
+positions moved since the previous week — and churn sits at 12-15 from Week 4
+through Week 12 with no decay at all.  By that measure the ranking never
+settles during a season; it just stops receiving games.
+
+**The top 25 is the last band to settle, not the first.**  Restricted to teams
+that finish in the final top 25, tau runs 0.10-0.44 through Week 9 while the
+all-teams tau is 0.23-0.62 — the tail sorts itself early because 1-9 teams are
+easy to place, while the contenders are a dense cluster that every result
+reshuffles.  The gap closes by Week 11.  Fewer than half the eventual top 25
+are within three places of their finish before Week 13, and the jump to ~23 of
+25 comes at Week **14**, not 13:
+
+| CFB wk | 2026 date | tau (top 25) | tau (all) | within ±3 of final |
+|---|---|---|---|---|
+| 5 | Oct 5 | 0.372 | 0.526 | 5.0 |
+| 9 | Nov 2 | 0.412 | 0.623 | 5.0 |
+| 12 | Nov 23 | 0.645 | 0.682 | 10.8 |
+| **13** | **Nov 30** | 0.838 | 0.867 | **16.2** |
+| **14** | **Dec 7** | 0.895 | 0.965 | **23.2** |
+
+2024 is the caution: top-25 tau *fell* to 0.69 at Week 14, because conference
+championship weekend can scramble the top rather than settle it.
+
+**In short:** do not generate before Week 5, treat Weeks 5-8 as directional
+only, and expect the first ranking worth standing behind at Week 13 — Week 14
+if the top 25 is what you care about.
+
+```bash
+python season_progression.py games_2025.csv --calendar 2026
+python season_progression.py games_20*.csv --average --bands --calendar 2026
+python season_progression.py games_2025.csv --quick    # skip the slow tiers
+```
+
+The week calendar is derived rather than hardcoded: Week 1 is the weekend
+ending on Labor Day, so Week 0's Saturday is nine days before it.  That rule
+reproduces the opening Saturday of 2022-2025 exactly, and a test asserts it
+against the data files.
+
+---
+
 ## Conflicts between groups
 
 A worked example, as covered by `TestConflictingVerdicts`:
@@ -967,6 +1055,11 @@ of this file shows the latest result.
   given margin (including a winless team not dividing by zero), the influence
   figures, an undifferentiated field yielding no ratio rather than a huge one,
   and the CLI rejecting malformed weights
+- `season_progression.py`: the Labor Day week calendar checked against every
+  data file's opening Saturday, a Saturday slate never split across two
+  cutoffs, evidence tiers covering each pair exactly once, the clique index
+  agreeing with an unindexed comparison, and Kendall tau-b matching published
+  values on tie-heavy cases
 - `fetch_games.py` classification: only an explicit `fbs` counting as FBS, an
   unclassified team not slipping through as one, case and padding ignored, and
   a response with no classification fields at all failing loudly rather than
