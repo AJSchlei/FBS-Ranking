@@ -1706,7 +1706,11 @@ class TestDefaultWeights(unittest.TestCase):
     """The shipped defaults are a deliberate choice, so pin them."""
 
     def test_blend_weights(self):
-        self.assertEqual(FBSRoundRobinRanker.BLEND_WEIGHTS, (0.75, 0.25, 0.0))
+        self.assertEqual(FBSRoundRobinRanker.BLEND_WEIGHTS, (0.67, 0.22, 0.11))
+
+    def test_the_third_term_carries_weight(self):
+        """Opponents' opponents are consulted, not switched off."""
+        self.assertGreater(FBSRoundRobinRanker.BLEND_WEIGHTS[2], 0)
 
     def test_weights_sum_to_one(self):
         self.assertAlmostEqual(sum(FBSRoundRobinRanker.BLEND_WEIGHTS), 1.0)

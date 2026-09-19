@@ -418,7 +418,7 @@ who each of them played.  `BLEND_WEIGHTS` sets that blend, as
 `(own record, opponents' records, opponents' opponents' records)`:
 
 ```
-blended score = a x WP + b x OWP + c x OOWP     # default (0.75, 0.25, 0.0)
+blended score = a x WP + b x OWP + c x OOWP   # default (0.67, 0.22, 0.11)
 ```
 
 `(1.0, 0.0, 0.0)` is the plain shrunk record and reproduces the older
@@ -439,38 +439,92 @@ separates teams:
 | weights | own | opponents | opps' opps | own : opponent |
 |---------|-----|-----------|------------|----------------|
 | (1, 0, 0) | .1787 | -- | -- | no contest |
-| **(.75, .25, 0)** | .1340 | .0122 | -- | **11.0 : 1** |
+| (.75, .25, 0) | .1340 | .0122 | -- | 11.0 : 1 |
+| **(.67, .22, .11)** | .1197 | .0108 | .0029 | **8.7 : 1** |
 | (.60, .30, .10) | .1072 | .0147 | .0027 | 6.2 : 1 |
 | (.50, .50, 0) | .0894 | .0245 | -- | 3.7 : 1 |
 
-Measured against the plain shrunk record on three seasons.  "Record
-inversions" counts pairs where the lower-ranked team has a win percentage at
-least .150 better; some are legitimate — a group verdict outranking a record is
-the system working — so what matters is how the count *moves*.
+Measured against the plain shrunk record on four seasons.  "Record inversions"
+counts pairs where the lower-ranked team has a win percentage at least .150
+better; some are legitimate — a group verdict outranking a record is the system
+working — so what matters is how the count *moves*.
 
-| weights | 2023 | 2024 | 2025 |
-|---------|------|------|------|
-| (1, 0, 0) | 502 | 631 | 626 |
-| **(.75, .25, 0)** | **503 (+0.2%)** | **635 (+0.6%)** | **624 (-0.3%)** |
-| (.60, .30, .10) | 503 (+0.2%) | 638 (+1.1%) | 628 (+0.3%) |
-| (.50, .50, 0) | 517 (+3.0%) | 669 (+6.0%) | 640 (+2.2%) |
+| weights | 2022 | 2023 | 2024 | 2025 |
+|---------|------|------|------|------|
+| (1, 0, 0) | 392 | 502 | 631 | 626 |
+| (.75, .25, 0) | 392 (+0.0%) | 503 (+0.2%) | 635 (+0.6%) | 624 (-0.3%) |
+| **(.67, .22, .11)** | **392 (+0.0%)** | **503 (+0.2%)** | **635 (+0.6%)** | **627 (+0.2%)** |
+| (.60, .30, .10) | 398 (+1.5%) | 503 (+0.2%) | 638 (+1.1%) | 628 (+0.3%) |
+| (.50, .50, 0) | 447 (+14.0%) | 517 (+3.0%) | 668 (+5.9%) | 640 (+2.2%) |
 
-The default is effectively flat across all three, inside ±1% every year.  The
-even split is worse every year, by 2% to 6%.  That consistency is the argument
-for the default — not any single season's figure.
+The default is flat in all four, never more than six tenths of a percent from
+the baseline in either direction, and matches the two-term `(.75, .25, 0)`
+exactly in three of the four.  The even split is worse in all four, and 2022
+punishes it by 14%.  That consistency is the argument for the default — not any
+single season's figure.
+
+### What the third term is for
+
+At a tenth of the weight, opponents' opponents look nearly redundant: OOWP
+correlates .45 with OWP and varies a seventh as much as own record, so it moves
+only 9 to 22 teams a season, mostly by a place or two.  But the direction is
+consistent, and in one case it is the *only* thing that can produce the answer.
+
+Against the two-term `(.75, .25, 0)`, moving to the default changes four things
+in four seasons' top 25 — the top 4 never moves:
+
+| season | change | OOWP edge to the team that rises |
+|---|---|---|
+| 2022 | Tennessee over Troy (#5/#6) | +.035 |
+| 2022 | Alabama over Tulane (#7/#8) | +.054 |
+| 2023 | Oklahoma State in at #25, Ohio out | +.048 |
+| 2025 | Ole Miss over Texas A&M (#7/#8) | +.019 |
+
+Every one lifts the team with the better opponents' opponents.  Three of them
+pit a power-conference team against a Group of Five team with a strong record,
+where the immediate opponents' records already pointed the same way.
+
+**The 2025 case is the one that could not happen otherwise.**  Ole Miss has the
+*worse* OWP (.486 against .497) and still rises, because its opponents played a
+markedly tougher slate in turn.  No other tier in this system can see one layer
+past a team's own schedule.
 
 2025 alone would have oversold it: there it slightly *reduced* inversions,
-which looked like a point in its favour until 2024 and 2023 showed that was a
+which looked like a point in its favour until the other three showed that was a
 one-season accident rather than a property of the weighting.
 
 | season | weights | teams moved | median shift | max shift |
 |---|---|---|---|---|
-| 2023 | (.75, .25, 0) | 61 of 133 | 1 | 25 |
-| 2023 | (.50, .50, 0) | 94 of 133 | 2 | 24 |
-| 2024 | (.75, .25, 0) | 47 of 134 | 2 | 17 |
-| 2024 | (.50, .50, 0) | 95 of 134 | 2 | 42 |
-| 2025 | (.75, .25, 0) | 40 of 136 | 1 | 9 |
-| 2025 | (.50, .50, 0) | 94 of 136 | 1 | 22 |
+| 2022 | **(.67, .22, .11)** | 55 of 131 | 1 | 10 |
+| 2022 | (.50, .50, 0) | 109 of 131 | 2 | 34 |
+| 2023 | **(.67, .22, .11)** | 58 of 133 | 1 | 25 |
+| 2023 | (.50, .50, 0) | 93 of 133 | 2 | 24 |
+| 2024 | **(.67, .22, .11)** | 47 of 134 | 2 | 17 |
+| 2024 | (.50, .50, 0) | 94 of 134 | 2 | 42 |
+| 2025 | **(.67, .22, .11)** | 58 of 136 | 1 | 17 |
+| 2025 | (.50, .50, 0) | 95 of 136 | 1 | 22 |
+
+Two figures worth keeping in view while reading those, because they are easy
+to mistake for each other:
+
+| season | teams | largest group | pairs reaching strength 0 | win pct spread |
+|---|---|---|---|---|
+| 2022 | 131 | 10 | 7,572 of 8,515 (88.9%) | .206 |
+| 2023 | 133 | 9 | 7,816 of 8,778 (89.0%) | .219 |
+| 2024 | 134 | 7 | 7,904 of 8,911 (88.7%) | .213 |
+| 2025 | 136 | 7 | 8,166 of 9,180 (89.0%) | .243 |
+
+Realignment shrank the largest round-robin group from 10 to 7, and changed the
+share of pairs reaching the blend not at all.  **About 89% of pairs reach
+strength 0 in every season measured**, which looks like a property of how FBS
+schedules are shaped rather than of any particular conference alignment: a
+10-team round-robin settles 45 pairs out of 8,515.  The blend is not an
+edge-case handler.
+
+2022's much lower inversion count is not the group structure either — its
+records were simply the most compressed of the four (a win-percentage spread of
+.206 against 2025's .243), so fewer pairs had a large record gap available to
+invert.
 
 ### The case the blend exists for
 
@@ -496,15 +550,16 @@ opponents at all.
 
 Two notes from these tables:
 
-- **An even split is a large change, not a moderate one.**  It moves 94 of 136
+- **An even split is a large change, not a moderate one.**  It moves 95 of 136
   teams, puts LSU (6-5) above Missouri and Tennessee (both 7-4) on the strength
   of a .09 schedule gap, and drops App State 22 places for having played
   Charlotte (0-10), Georgia State (0-10) and Oregon State (1-8).
-- **A third term earns very little at a small weight.**  (.60, .30, .10) and
-  (.60, .40, 0) produce identical top 25s and differ on 13 of 136 teams; OOWP
-  correlates .45 with OWP and varies too little to register.  Most of what
-  separates (.60, .30, .10) from the default comes from the own-record weight,
-  not from the new layer.
+- **A third term earns little on volume, and is not therefore noise.**
+  (.60, .30, .10) and (.60, .40, 0) produce identical top 25s and differ on 13
+  of 136 teams; the default differs from a two-term version of itself on 9 to
+  22 teams a season.  Most of what separates any two of these weightings comes
+  from the own-record weight rather than the third layer — but see "What the
+  third term is for" above for the case where that layer decides alone.
 
 The large record inversions that remain (James Madison at 11-1 sitting below
 several 6-6 SEC teams) come from the group tiers and no weighting touches them.
@@ -733,7 +788,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-211 tests cover:
+212 tests cover:
 
 - Empty ranker
 - Single game (2-clique)
@@ -809,13 +864,15 @@ of this file shows the latest result.
 
 ## Assumptions & limitations
 
-- **Round-robin groups are small in practice.**  Modern conferences are far
-  larger than the number of conference games each team plays, so complete
-  round-robins barely exist.  In the 2025 FBS regular season the largest group
-  was 7 teams (the Sun Belt), and 92% of team pairs shared no group at all.
-  The group evidence still does heavy lifting — group verdicts lock in first
-  and chain transitively to settle about 75% of all pairs — but the weaker
-  tiers carry more of the load than the name suggests.
+- **Round-robin groups are small in practice, and realignment has not changed
+  that.**  Modern conferences are far larger than the number of conference
+  games each team plays, so complete round-robins barely exist.  The largest
+  group was 10 teams in 2022 and 7 in 2025 — but the share of pairs that reach
+  the weakest tier held at about 89% in all four seasons measured, because a
+  10-team round-robin settles 45 pairs out of 8,515.  Group evidence still does
+  heavy lifting, since those verdicts lock in first and chain transitively to
+  settle roughly 75% of all pairs, but the weaker tiers carry more of the load
+  than the name suggests, and no plausible conference structure changes that.
 - **No overtime distinction.**  A win is a win regardless of overtime.
 - **Non-FBS opponents must be marked unranked.**  Loading an FCS opponent as a
   ranked team puts it in the game graph on the strength of one game, which

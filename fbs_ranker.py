@@ -118,15 +118,21 @@ class FBSRoundRobinRanker:
     # opponents' opponents' records); they should sum to 1.  (1, 0, 0) is the
     # plain shrunk record.
     #
-    # The default gives opponents a quarter weight.  Nominal weight overstates
-    # a term's influence, because the three metrics do not vary equally: across
-    # the 2025 field own record spans .133-.875 while opponents' records span
-    # only .383-.617, each averaging layer pulling harder toward .500.  Weight
-    # times spread is what actually decides, and at (.75, .25, 0) own record
-    # outweighs opponents about 11 to 1.  An even split makes it 3.7 to 1,
-    # which moves 94 of 136 teams and drops App State 22 places on the strength
-    # of three bad opponents.
-    BLEND_WEIGHTS = (0.75, 0.25, 0.0)
+    # The default gives own record two thirds and splits the rest 2:1 between
+    # the opponent layers.  Nominal weight overstates a term's influence,
+    # because the three metrics do not vary equally: across the 2025 field own
+    # record spans .133-.875, opponents' records only .383-.617, and opponents'
+    # opponents' only .436-.568, each averaging layer pulling harder toward
+    # .500.  Weight times spread is what actually decides, and this default
+    # puts own record about 8.7 to 1 against the two opponent terms together.
+    # An even split makes it 3.7 to 1, which moves 94 of 136 teams and costs
+    # 2% to 14% more record inversions depending on the season.
+    #
+    # The third term is small but not redundant.  It is the only thing that can
+    # see past a team's own opponents: in 2025 it lifts Ole Miss above Texas
+    # A&M despite the WORSE opponents' record, because those opponents played a
+    # markedly tougher slate in turn.
+    BLEND_WEIGHTS = (0.67, 0.22, 0.11)
 
     # How far apart two blended scores must be before the difference is
     # treated as real.  Below this they are considered level and overall point
