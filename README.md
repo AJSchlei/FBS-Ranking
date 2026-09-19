@@ -538,20 +538,21 @@ Measured across 2023-2025, one game is worth this much blend:
 So a gap of .001 is about a fifth of one opponent-game — finer than any
 evidence the data can express.
 
-**The shipped default is `1e-9`, float noise only, so any difference at all
-decides.**  In 2023 that put Washington above Michigan on a gap of .00012,
-overriding a 171-point differential (+354 against +183).  The two are
-undefeated, never played, share one opponent they both beat, and have win
-percentages identical to the last decimal — the only thing between them is a
-fourth-decimal difference in their opponents' records.
+**The default is `.001`.**  It used to be a bare `1e-9` — float noise, so any
+difference at all decided.  In 2023 that put Washington above Michigan on a gap
+of .00012, overriding a 171-point differential (+354 against +183).  The two
+are undefeated, never played, share one opponent they both beat, and have win
+percentages identical to the last decimal; the only thing between them was a
+fourth-decimal difference in their opponents' records.  Under the current
+default they are level on the blend and Michigan's point differential decides.
 
-What a wider threshold would cost, measured on the ~8,000 strength-0 pairs in
-each season:
+What each threshold costs, measured on the ~8,000 strength-0 pairs in each
+season:
 
 | threshold | pairs below it (2023 / 2024 / 2025) | teams whose rank changes |
 |---|---|---|
 | .0001 | 4 / 2 / 1 | 0 / 0 / 0 |
-| .001 | 44 / 22 / 37 | 6 / 0 / 4 |
+| **.001 (default)** | **44 / 22 / 37** | **6 / 0 / 4** |
 | .005 | 214 / 184 / 188 | 7 / 0 / 8 |
 | .01 | 403 / 372 / 373 | 11 / 2 / 17 |
 
@@ -732,7 +733,7 @@ Every push and pull request runs the suite automatically on Python 3.9 through
 3.13 via GitHub Actions (`.github/workflows/tests.yml`); the badge at the top
 of this file shows the latest result.
 
-210 tests cover:
+211 tests cover:
 
 - Empty ranker
 - Single game (2-clique)

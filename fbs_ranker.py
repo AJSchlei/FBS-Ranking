@@ -130,9 +130,14 @@ class FBSRoundRobinRanker:
 
     # How far apart two blended scores must be before the difference is
     # treated as real.  Below this they are considered level and overall point
-    # differential decides instead.  The default is float noise only, so any
-    # difference at all counts.
-    BLEND_EPSILON = 1e-9
+    # differential decides instead.
+    #
+    # Measured across 2023-2025, one game is worth about .047 of blend to the
+    # team that played it and .0045 to a team whose opponent played it, so a
+    # gap below .001 is finer than any evidence the data can express — an
+    # artifact of averaging averages rather than anything that happened on a
+    # field.  Set to 0 to let any difference at all decide.
+    BLEND_EPSILON = 0.001
 
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a

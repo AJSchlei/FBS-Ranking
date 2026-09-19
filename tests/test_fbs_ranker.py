@@ -1624,9 +1624,10 @@ class TestBlendEpsilon(unittest.TestCase):
     and one game played by ONE of its opponents about .0045, so a gap below
     .001 is finer than any evidence the data can express.
 
-    The shipped default is float noise only, which means any difference at all
-    decides.  In 2023 that put Washington above Michigan on a gap of .00012,
-    overriding a 171-point differential.
+    Until this was set deliberately the comparison used a bare 1e-9 literal —
+    float noise, meaning any difference at all decided.  In 2023 that put
+    Washington above Michigan on a gap of .00012, overriding a 171-point
+    differential.
 
     No test pins the behaviour of a gap exactly equal to the threshold: the
     comparison is a strict >, and floating point makes "exactly equal"
@@ -1660,11 +1661,18 @@ class TestBlendEpsilon(unittest.TestCase):
             g.add_edge(ta, tb)
         return list(nx.find_cliques(g))
 
-    def test_default_is_float_noise_only(self):
-        self.assertEqual(FBSRoundRobinRanker.BLEND_EPSILON, 1e-9)
+    def test_default_is_a_fifth_of_one_opponent_game(self):
+        self.assertEqual(FBSRoundRobinRanker.BLEND_EPSILON, 0.001)
+
+    def test_a_gap_finer_than_the_default_no_longer_decides(self):
+        """The 2023 Washington / Michigan shape: .00012 is not a difference."""
+        r = self._ranker(epsilon=FBSRoundRobinRanker.BLEND_EPSILON,
+                         gap=0.00012)
+        cmp, _ = r._pairwise_compare("X", "Y", self._cliques(r))
+        self.assertEqual(cmp, 1, "point differential should decide")
 
     def test_a_gap_above_the_threshold_decides(self):
-        r = self._ranker(epsilon=1e-9, gap=0.0001)
+        r = self._ranker(epsilon=0.0001, gap=0.001)
         cmp, strength = r._pairwise_compare("X", "Y", self._cliques(r))
         self.assertEqual(strength[0], 0)
         self.assertEqual(cmp, -1, "X's better blend should win")
