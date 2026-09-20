@@ -173,10 +173,15 @@ class FBSRoundRobinRanker:
     # For GROUP_TIEBREAK="withhold_thin": the smallest in-group point
     # differential gap that may decide a tie on in-group win percentage.
     # Below it the group says nothing.  0 reproduces "point_diff"; a value
-    # larger than any real gap withholds every tie.  20 withholds only the
+    # larger than any real gap withholds every tie.  10 withholds only the
     # genuinely thin ties -- it leaves a clear-cut differential alone while
-    # refusing to let two points decide a place in the order.
-    GROUP_TIE_MIN_DIFF = 20
+    # refusing to let two points decide a place in the order.  Ten points is
+    # about a possession and a half, which is roughly the smallest margin
+    # anyone would call a real difference between two teams; a sweep from 5
+    # to 30 across all eight data files (see the README) shows the useful
+    # range is 8-15 and that choosing within it to the nearest point is
+    # fitting noise.
+    GROUP_TIE_MIN_DIFF = 10
 
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a

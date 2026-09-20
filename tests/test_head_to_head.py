@@ -199,11 +199,11 @@ class TestAgainstRealSeasons(unittest.TestCase):
     def test_the_2025_counts_are_what_they_were_measured_to_be(self):
         report = self._audit("games_2025.csv")
         self.assertEqual(report["decided"], 750)
-        self.assertEqual(report["contradicted"], 82)
+        self.assertEqual(report["contradicted"], 85)
         by = {}
         for item in report["contradictions"]:
             by[item["mechanism"]] = by.get(item["mechanism"], 0) + 1
-        self.assertEqual(by[h2h.GROUP], 56)
+        self.assertEqual(by[h2h.GROUP], 59)
         self.assertEqual(by[h2h.OVERRIDDEN], 26)
 
     def test_the_old_point_diff_default_still_measures_as_it_did(self):

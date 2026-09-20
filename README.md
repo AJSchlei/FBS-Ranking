@@ -839,14 +839,14 @@ head-to-head series *above* the winner in **11% to 17% of decided pairs**:
 
 | season | decided series | contradicted | group ranked them the other way | verdict overridden |
 |---|---|---|---|---|
-| 2022 | 726 | 126 (17.4%) | 89 | 37 |
-| 2023 | 746 | 103 (13.8%) | 73 | 30 |
-| 2024 | 746 | 97 (13.0%) | 67 | 30 |
-| 2025 | 750 | 82 (10.9%) | 56 | 26 |
-| 2022 + postseason | 768 | 131 (17.1%) | 88 | 43 |
-| 2023 + postseason | 788 | 108 (13.7%) | 72 | 36 |
-| 2024 + postseason | 790 | 113 (14.3%) | 75 | 38 |
-| 2025 + postseason | 789 | 95 (12.0%) | 58 | 37 |
+| 2022 | 726 | 122 (16.8%) | 88 | 34 |
+| 2023 | 746 | 101 (13.5%) | 75 | 26 |
+| 2024 | 746 | 101 (13.5%) | 73 | 28 |
+| 2025 | 750 | 85 (11.3%) | 59 | 26 |
+| 2022 + postseason | 768 | 132 (17.2%) | 89 | 43 |
+| 2023 + postseason | 788 | 113 (14.3%) | 77 | 36 |
+| 2024 + postseason | 790 | 115 (14.6%) | 80 | 35 |
+| 2025 + postseason | 789 | 98 (12.4%) | 63 | 35 |
 
 (Under the former `point_diff` default these read 120, 111, 104, 92 and
 128, 120, 116, 105 — see
@@ -1067,32 +1067,46 @@ Memphis tie 3-2 with a 70-point differential gap — not thin — so withholding
 leaves that verdict alone, and South Florida stays above the team that beat
 it.  Only `head_to_head` reverses that pair, and only at the cost above.
 
-**`GROUP_TIE_MIN_DIFF` defaults to 20**, which withholds only the genuinely
-thin ties and leaves a clear-cut differential alone.  That setting has the
-best profile of anything tried here:
+**`GROUP_TIE_MIN_DIFF` defaults to 10.**  Sweeping it from 5 to 30 across all
+eight data files, counting how many files each setting improves against the
+former `point_diff` default:
+
+| threshold | contradictions better | inversions better | **both better** |
+|---|---|---|---|
+| 5 | 5 | 5 | 4 |
+| 8 | **7** | 7 | **6** |
+| **10** | 6 | **8** | **6** |
+| 15 | 6 | 7 | 5 |
+| 20 | 6 | 7 | 5 |
+| 30 | 6 | 6 | 4 |
+
+10 is the only setting that lowers record inversions on **every** file, and
+its two contradiction regressions are both 2022, the outlier season
+throughout this README:
 
 | season | contradictions | record inversions |
 |---|---|---|
-| 2022 | 120 → 126 | 392 → **366** |
-| 2023 | 111 → **103** | 503 → 630 |
-| 2024 | 104 → **97** | 635 → **606** |
-| 2025 | 92 → **82** | 617 → **571** |
-| 2022 + post | 128 → 131 | 470 → **447** |
-| 2023 + post | 120 → **108** | 676 → **611** |
-| 2024 + post | 116 → **113** | 705 → **679** |
-| 2025 + post | 105 → **95** | 510 → **483** |
+| 2022 | 120 → 122 | 392 → **391** |
+| 2023 | 111 → **101** | 503 → **419** |
+| 2024 | 104 → **101** | 635 → **625** |
+| 2025 | 92 → **85** | 617 → **605** |
+| 2022 + post | 128 → 132 | 470 → **420** |
+| 2023 + post | 120 → **113** | 676 → **660** |
+| 2024 + post | 116 → **115** | 705 → **694** |
+| 2025 + post | 105 → **98** | 510 → **451** |
 
-Better on **both** measures in five of eight files, and on at least one in all
-eight.  `head_to_head` wins contradictions but pays heavily in inversions;
-withholding every tie is mixed; this is the only setting that usually improves
-both.  2022 is the outlier season throughout, as it is everywhere else in this
-README.
+**The shape matters more than the point.**  Everything from 8 to 15 beats both
+0 and 30, and the gaps between those settings are 1 to 7 counts out of ~100 on
+eight files that are not independent — the `_both` files contain the regular
+ones.  Season-to-season variation is larger than the differences among them,
+so choosing 8 against 10 against 15 to the nearest point is fitting noise.
+10 is picked for a reason outside the data: ten points is about a possession
+and a half, roughly the smallest margin anyone would call a real difference
+between two teams.
 
-It is also by far the least disruptive.  On 2025 + postseason it keeps **all
-25** of the top 25 and moves exactly one team meaningfully — Iowa State, 8-4
-and **4-0** inside a five-team group, from #23 to #8 — with everything else
-shifting by at most one place.  The other variants reshuffle 100+ teams and
-drop as many as 9 of the top 25.
+It is also by far the least disruptive.  On 2025 + postseason the **entire top
+25 is unchanged** from `point_diff` — every improvement happens below it.  The
+other variants reshuffle 100+ teams and drop as many as 9 of the top 25.
 
 `GROUP_TIE_MIN_DIFF` has no effect under any other `GROUP_TIEBREAK` setting;
 under `"point_diff"`, `"head_to_head"` or `"head_to_head_acyclic"` the
@@ -1124,7 +1138,7 @@ in `test_the_old_point_diff_default_still_measures_as_it_did`, so the change
 can be reversed or re-argued on new data:
 
 ```bash
-python head_to_head.py games_2025.csv        # 82 contradicted (default)
+python head_to_head.py games_2025.csv        # 85 contradicted (default)
 # set GROUP_TIEBREAK = "point_diff"  and re-run: 92
 # set GROUP_TIEBREAK = "head_to_head":          74
 # set GROUP_TIEBREAK = "head_to_head_acyclic":  86
