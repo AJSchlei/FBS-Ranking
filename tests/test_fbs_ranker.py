@@ -1280,6 +1280,59 @@ class TestCommonOpponentStrength(unittest.TestCase):
         self.assertEqual(r._head_to_head_verdict("B", "A"), 1)
         self.assertIsNone(r._head_to_head_verdict("A", "Nobody"))
 
+    def test_group_tie_min_diff_default(self):
+        self.assertEqual(FBSRoundRobinRanker.GROUP_TIE_MIN_DIFF, 10)
+
+    def test_withhold_thin_declines_a_tie_it_cannot_settle_convincingly(self):
+        """A margin of a couple of points is not evidence a group can supply.
+
+        B and C are both 1-1 inside the cycle and separated by 11 points of
+        in-group differential.  Above that threshold the verdict stands;
+        raise the bar past it and the group says nothing instead.
+        """
+        games = (("A", "B", 21, 20), ("B", "C", 21, 0), ("C", "A", 30, 0))
+        group = ["A", "B", "C"]
+
+        speaks = make_ranker(*games)
+        speaks.GROUP_TIEBREAK = "withhold_thin"
+        speaks.GROUP_TIE_MIN_DIFF = 10
+        self.assertIsNotNone(speaks._verdict_in_group("B", "C", group))
+
+        withholds = make_ranker(*games)
+        withholds.GROUP_TIEBREAK = "withhold_thin"
+        withholds.GROUP_TIE_MIN_DIFF = 15
+        self.assertIsNone(withholds._verdict_in_group("B", "C", group))
+
+    def test_a_withheld_verdict_drops_the_pair_out_of_the_group_tier(self):
+        """Withholding is not a tie -- the pair falls through to weaker tiers.
+
+        That is the whole point: a pair the group cannot settle should be
+        decided by common opponents or the blend, not inherit a position from
+        a margin of a point or two.
+        """
+        r = make_ranker(("A", "B", 21, 20), ("B", "C", 21, 0), ("C", "A", 30, 0))
+        r.GROUP_TIEBREAK = "withhold_thin"
+        r.GROUP_TIE_MIN_DIFF = 100          # withhold every tie
+        _, strength = r._pairwise_compare("B", "C", self._cliques(r))
+        self.assertLess(strength[0], 3, "should not still be a group verdict")
+
+    def test_withhold_thin_at_zero_reproduces_point_diff(self):
+        games = (("A", "B", 21, 20), ("B", "C", 21, 0), ("C", "A", 30, 0))
+        zero = make_ranker(*games)
+        zero.GROUP_TIEBREAK = "withhold_thin"
+        zero.GROUP_TIE_MIN_DIFF = 0
+        self.assertEqual([x["team"] for x in zero.rank()],
+                         [x["team"] for x in make_ranker(*games).rank()])
+
+    def test_withhold_thin_never_touches_a_pair_separated_on_win_pct(self):
+        """It withholds TIES; a decided in-group record is untouched."""
+        r = make_ranker(("A", "B", 21, 20), ("A", "C", 30, 0), ("B", "C", 30, 0))
+        r.GROUP_TIEBREAK = "withhold_thin"
+        r.GROUP_TIE_MIN_DIFF = 10 ** 6      # withhold every tie
+        cmp, gap, _ = r._verdict_in_group("A", "B", ["A", "B", "C"])
+        self.assertEqual(cmp, -1)           # A is 2-0, B is 1-1
+        self.assertGreater(gap, 0.0)
+
     def test_acyclic_tiebreak_uses_the_meeting_when_the_tied_set_is_an_order(self):
         """Two teams tied at 2-1 in a four-team group; their meeting decides.
 

@@ -162,7 +162,19 @@ class FBSRoundRobinRanker:
     # so the head-to-head result is always available.  It is NOT transitive,
     # though: a three-way cycle leaves all three teams 1-1 and pointing at
     # each other, and no total order can honour all three.  See the README.
+    # "withhold_thin" is different in kind from the three above: instead of
+    # choosing WHICH signal breaks a group tie, it declines to break one the
+    # group cannot settle convincingly.  A withheld verdict makes that clique
+    # size silent, so the pair falls through to a smaller group, then common
+    # opponents, then the blend -- rather than inheriting a position from a
+    # margin of a point or two.
     GROUP_TIEBREAK = "point_diff"
+
+    # For GROUP_TIEBREAK="withhold_thin": the smallest in-group point
+    # differential gap that may decide a tie on in-group win percentage.
+    # Below it the group says nothing.  0 reproduces "point_diff"; a value
+    # larger than any real gap withholds every tie.
+    GROUP_TIE_MIN_DIFF = 10
 
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a
@@ -471,6 +483,13 @@ class FBSRoundRobinRanker:
         # transitive; head-to-head is not, and in a 3-way cycle no ordering
         # can satisfy every meeting.  For 2-team groups win pct already
         # encodes head-to-head, so this only matters in groups of 3 or more.
+        if self.GROUP_TIEBREAK == "withhold_thin":
+            # Only a convincing differential may break the tie; anything
+            # thinner is not evidence this group can supply.
+            if diff_a != diff_b and diff_gap >= self.GROUP_TIE_MIN_DIFF:
+                return (-1 if diff_a > diff_b else 1), 0.0, diff_gap
+            return None
+
         if self.GROUP_TIEBREAK in ("head_to_head", "head_to_head_acyclic"):
             consult = (self.GROUP_TIEBREAK == "head_to_head"
                        or self._tied_set_is_acyclic(group, wpc_a))

@@ -1008,6 +1008,63 @@ It still improves on the default because a result can sit in a global 3-cycle
 while the tied set inside a particular group is acyclic — the two overlap
 only partly.
 
+#### A fourth mode: withholding a tie instead of breaking it
+
+The three modes above all choose WHICH signal breaks a tie inside a group.
+`GROUP_TIEBREAK = "withhold_thin"` asks a different question: should the group
+break that tie at all?  When two members tie on in-group win percentage and
+the in-group point differential gap is below `GROUP_TIE_MIN_DIFF`, it returns
+no verdict.  That clique size goes silent and the pair falls through to a
+smaller group, then common opponents, then the blend.
+
+The motivation is a real case.  In 2025 Houston and West Virginia both went
+2-2 inside the Big 12 five-team group, separated by **two points** of in-group
+differential (+11 against +9).  That two-point margin is load-bearing: it is
+the only thing keeping a 4-8 West Virginia at #99 rather than inheriting a
+place just above a 10-3 Houston at #21.  Switching to head-to-head there (West
+Virginia won the meeting 45-35) moves West Virginia to **#22**.  Neither
+tiebreak is standing on firm ground; transitive closure is amplifying a
+coin-flip into a 78-place swing.
+
+Withholding every such tie (`GROUP_TIE_MIN_DIFF` above any real gap):
+
+| season | point_diff | withhold | head_to_head | | point_diff | withhold | head_to_head |
+|---|---|---|---|---|---|---|---|
+| | **contradictions** | | | | **record inversions** | | |
+| 2022 | 120 | 121 | **105** | | 392 | **351** | 741 |
+| 2023 | 111 | 99 | **90** | | **503** | 652 | 693 |
+| 2024 | 104 | **89** | 91 | | 635 | **584** | 601 |
+| 2025 | 92 | **73** | 74 | | **617** | 687 | 780 |
+| 2022 + post | 128 | 125 | **118** | | **470** | 497 | 741 |
+| 2023 + post | 120 | 110 | **105** | | 676 | **625** | 879 |
+| 2024 + post | 116 | 110 | **108** | | 705 | 705 | 756 |
+| 2025 + post | 105 | **93** | 97 | | 510 | **403** | 718 |
+
+**Withholding beats the default on head-to-head contradictions in seven of
+eight files** (by 3 to 19; 2022 is worse by one).  On record inversions it is
+mixed — better in four, worse in three, level in one.
+
+**It dominates `head_to_head`**: comparable on contradictions, and lower on
+record inversions in **all eight files**, by as much as 390 (2022) and 315
+(2025 + postseason).  Where head-to-head buys its correction by disagreeing
+much more with records, withholding does not.
+
+It also fixes the two cases that motivated it.  2025 + postseason: West
+Virginia stays at #99 rather than jumping to #22, and Arizona State's 8-5 at
+#7 becomes #23.  The playoff teams rise as they do under head-to-head (Miami
+#5, Ohio State #6, Ole Miss #7, Notre Dame #10).
+
+**What it does not fix** is the case that prompted it.  South Florida and
+Memphis tie 3-2 with a 70-point differential gap — not thin — so withholding
+leaves that verdict alone, and South Florida stays above the team that beat
+it.  Only `head_to_head` reverses that pair, and only at the cost above.
+
+A middle setting is available: `GROUP_TIE_MIN_DIFF = 20` withholds only the
+genuinely thin ties, moves far fewer teams, and keeps more of the top 25 (all
+25 in 2025, 24 of 25 in 2024 + postseason) while still removing 10
+contradictions in 2025.  It is worse than the default on 2022, which is the
+outlier season throughout this table.
+
 #### What the evidence supports
 
 | criterion | favours |
