@@ -1281,7 +1281,7 @@ class TestCommonOpponentStrength(unittest.TestCase):
         self.assertIsNone(r._head_to_head_verdict("A", "Nobody"))
 
     def test_group_tie_min_diff_default(self):
-        self.assertEqual(FBSRoundRobinRanker.GROUP_TIE_MIN_DIFF, 10)
+        self.assertEqual(FBSRoundRobinRanker.GROUP_TIE_MIN_DIFF, 20)
 
     def test_withhold_thin_declines_a_tie_it_cannot_settle_convincingly(self):
         """A margin of a couple of points is not evidence a group can supply.

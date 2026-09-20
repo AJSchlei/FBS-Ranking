@@ -1059,11 +1059,36 @@ Memphis tie 3-2 with a 70-point differential gap — not thin — so withholding
 leaves that verdict alone, and South Florida stays above the team that beat
 it.  Only `head_to_head` reverses that pair, and only at the cost above.
 
-A middle setting is available: `GROUP_TIE_MIN_DIFF = 20` withholds only the
-genuinely thin ties, moves far fewer teams, and keeps more of the top 25 (all
-25 in 2025, 24 of 25 in 2024 + postseason) while still removing 10
-contradictions in 2025.  It is worse than the default on 2022, which is the
-outlier season throughout this table.
+**`GROUP_TIE_MIN_DIFF` defaults to 20**, which withholds only the genuinely
+thin ties and leaves a clear-cut differential alone.  That setting has the
+best profile of anything tried here:
+
+| season | contradictions | record inversions |
+|---|---|---|
+| 2022 | 120 → 126 | 392 → **366** |
+| 2023 | 111 → **103** | 503 → 630 |
+| 2024 | 104 → **97** | 635 → **606** |
+| 2025 | 92 → **82** | 617 → **571** |
+| 2022 + post | 128 → 131 | 470 → **447** |
+| 2023 + post | 120 → **108** | 676 → **611** |
+| 2024 + post | 116 → **113** | 705 → **679** |
+| 2025 + post | 105 → **95** | 510 → **483** |
+
+Better on **both** measures in five of eight files, and on at least one in all
+eight.  `head_to_head` wins contradictions but pays heavily in inversions;
+withholding every tie is mixed; this is the only setting that usually improves
+both.  2022 is the outlier season throughout, as it is everywhere else in this
+README.
+
+It is also by far the least disruptive.  On 2025 + postseason it keeps **all
+25** of the top 25 and moves exactly one team meaningfully — Iowa State, 8-4
+and **4-0** inside a five-team group, from #23 to #8 — with everything else
+shifting by at most one place.  The other variants reshuffle 100+ teams and
+drop as many as 9 of the top 25.
+
+Note that `GROUP_TIE_MIN_DIFF` has no effect while `GROUP_TIEBREAK` is
+`"point_diff"`, which is still the default.  Setting the threshold alone does
+not change any ranking.
 
 #### What the evidence supports
 
