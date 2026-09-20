@@ -835,15 +835,23 @@ against the data files.
 
 **It usually does, but not always, and the exceptions are not rare.**  Across
 every season in this repository the final ranking places the loser of a
-head-to-head series *above* the winner in **12% to 17% of decided pairs**:
+head-to-head series *above* the winner in **11% to 17% of decided pairs**:
 
 | season | decided series | contradicted | group ranked them the other way | verdict overridden |
 |---|---|---|---|---|
-| 2022 | 726 | 120 (16.5%) | 88 | 32 |
-| 2023 | 746 | 111 (14.9%) | 83 | 28 |
-| 2024 | 746 | 104 (13.9%) | 78 | 26 |
-| 2025 | 750 | 92 (12.3%) | 65 | 27 |
-| 2025 + postseason | 789 | 105 (13.3%) | 69 | 36 |
+| 2022 | 726 | 122 (16.8%) | 88 | 34 |
+| 2023 | 746 | 101 (13.5%) | 75 | 26 |
+| 2024 | 746 | 101 (13.5%) | 73 | 28 |
+| 2025 | 750 | 85 (11.3%) | 59 | 26 |
+| 2022 + postseason | 768 | 132 (17.2%) | 89 | 43 |
+| 2023 + postseason | 788 | 113 (14.3%) | 77 | 36 |
+| 2024 + postseason | 790 | 115 (14.6%) | 80 | 35 |
+| 2025 + postseason | 789 | 98 (12.4%) | 63 | 35 |
+
+(Under the former `point_diff` default these read 120, 111, 104, 92 and
+128, 120, 116, 105 — see
+[Would a head-to-head tiebreak fix it?](#would-a-head-to-head-tiebreak-fix-it)
+for why the default changed.)
 
 A "decided" series is one a team won; pairs that split a series are counted
 separately, since there is no single result to contradict.
@@ -895,8 +903,8 @@ contradicted (18.2%) — and 6 of those 8 are this mechanism.
 ### Would a head-to-head tiebreak fix it?
 
 `GROUP_TIEBREAK` selects what breaks a tie inside a group when two members
-have the same in-group win percentage.  `"point_diff"` (the default) uses
-in-group point differential.  `"head_to_head"` consults the meeting between
+have the same in-group win percentage.  `"point_diff"` uses in-group point
+differential; it was the default until the measurements below changed it.  `"head_to_head"` consults the meeting between
 the two teams.  `"head_to_head_acyclic"` consults it only where the tied
 teams' results among themselves contain no cycle.
 
@@ -1008,30 +1016,132 @@ It still improves on the default because a result can sit in a global 3-cycle
 while the tied set inside a particular group is acyclic — the two overlap
 only partly.
 
+#### A fourth mode: withholding a tie instead of breaking it
+
+The three modes above all choose WHICH signal breaks a tie inside a group.
+`GROUP_TIEBREAK = "withhold_thin"` asks a different question: should the group
+break that tie at all?  When two members tie on in-group win percentage and
+the in-group point differential gap is below `GROUP_TIE_MIN_DIFF`, it returns
+no verdict.  That clique size goes silent and the pair falls through to a
+smaller group, then common opponents, then the blend.
+
+The motivation is a real case.  In 2025 Houston and West Virginia both went
+2-2 inside the Big 12 five-team group, separated by **two points** of in-group
+differential (+11 against +9).  That two-point margin is load-bearing: it is
+the only thing keeping a 4-8 West Virginia at #99 rather than inheriting a
+place just above a 10-3 Houston at #21.  Switching to head-to-head there (West
+Virginia won the meeting 45-35) moves West Virginia to **#22**.  Neither
+tiebreak is standing on firm ground; transitive closure is amplifying a
+coin-flip into a 78-place swing.
+
+Withholding every such tie (`GROUP_TIE_MIN_DIFF` above any real gap):
+
+| season | point_diff | withhold | head_to_head | | point_diff | withhold | head_to_head |
+|---|---|---|---|---|---|---|---|
+| | **contradictions** | | | | **record inversions** | | |
+| 2022 | 120 | 121 | **105** | | 392 | **351** | 741 |
+| 2023 | 111 | 99 | **90** | | **503** | 652 | 693 |
+| 2024 | 104 | **89** | 91 | | 635 | **584** | 601 |
+| 2025 | 92 | **73** | 74 | | **617** | 687 | 780 |
+| 2022 + post | 128 | 125 | **118** | | **470** | 497 | 741 |
+| 2023 + post | 120 | 110 | **105** | | 676 | **625** | 879 |
+| 2024 + post | 116 | 110 | **108** | | 705 | 705 | 756 |
+| 2025 + post | 105 | **93** | 97 | | 510 | **403** | 718 |
+
+**Withholding beats the default on head-to-head contradictions in seven of
+eight files** (by 3 to 19; 2022 is worse by one).  On record inversions it is
+mixed — better in four, worse in three, level in one.
+
+**It dominates `head_to_head`**: comparable on contradictions, and lower on
+record inversions in **all eight files**, by as much as 390 (2022) and 315
+(2025 + postseason).  Where head-to-head buys its correction by disagreeing
+much more with records, withholding does not.
+
+It also fixes the two cases that motivated it.  2025 + postseason: West
+Virginia stays at #99 rather than jumping to #22, and Arizona State's 8-5 at
+#7 becomes #23.  The playoff teams rise as they do under head-to-head (Miami
+#5, Ohio State #6, Ole Miss #7, Notre Dame #10).
+
+**What it does not fix** is the case that prompted it.  South Florida and
+Memphis tie 3-2 with a 70-point differential gap — not thin — so withholding
+leaves that verdict alone, and South Florida stays above the team that beat
+it.  Only `head_to_head` reverses that pair, and only at the cost above.
+
+**`GROUP_TIE_MIN_DIFF` defaults to 10.**  Sweeping it from 5 to 30 across all
+eight data files, counting how many files each setting improves against the
+former `point_diff` default:
+
+| threshold | contradictions better | inversions better | **both better** |
+|---|---|---|---|
+| 5 | 5 | 5 | 4 |
+| 8 | **7** | 7 | **6** |
+| **10** | 6 | **8** | **6** |
+| 15 | 6 | 7 | 5 |
+| 20 | 6 | 7 | 5 |
+| 30 | 6 | 6 | 4 |
+
+10 is the only setting that lowers record inversions on **every** file, and
+its two contradiction regressions are both 2022, the outlier season
+throughout this README:
+
+| season | contradictions | record inversions |
+|---|---|---|
+| 2022 | 120 → 122 | 392 → **391** |
+| 2023 | 111 → **101** | 503 → **419** |
+| 2024 | 104 → **101** | 635 → **625** |
+| 2025 | 92 → **85** | 617 → **605** |
+| 2022 + post | 128 → 132 | 470 → **420** |
+| 2023 + post | 120 → **113** | 676 → **660** |
+| 2024 + post | 116 → **115** | 705 → **694** |
+| 2025 + post | 105 → **98** | 510 → **451** |
+
+**The shape matters more than the point.**  Everything from 8 to 15 beats both
+0 and 30, and the gaps between those settings are 1 to 7 counts out of ~100 on
+eight files that are not independent — the `_both` files contain the regular
+ones.  Season-to-season variation is larger than the differences among them,
+so choosing 8 against 10 against 15 to the nearest point is fitting noise.
+10 is picked for a reason outside the data: ten points is about a possession
+and a half, roughly the smallest margin anyone would call a real difference
+between two teams.
+
+It is also by far the least disruptive.  On 2025 + postseason the **entire top
+25 is unchanged** from `point_diff` — every improvement happens below it.  The
+other variants reshuffle 100+ teams and drop as many as 9 of the top 25.
+
+`GROUP_TIE_MIN_DIFF` has no effect under any other `GROUP_TIEBREAK` setting;
+under `"point_diff"`, `"head_to_head"` or `"head_to_head_acyclic"` the
+threshold is simply unused.
+
 #### What the evidence supports
 
 | criterion | favours |
 |---|---|
-| head-to-head contradictions | `head_to_head`, clearly |
-| record inversions | mixed, and ambiguous in direction |
-| out-of-sample prediction | nothing — all three are chance |
-| disruption | `point_diff`, by being the incumbent |
+| head-to-head contradictions | `head_to_head` outright; `withhold_thin` in 6 of 8 files |
+| record inversions | `withhold_thin` in 7 of 8; `head_to_head` worse almost everywhere |
+| out-of-sample prediction | nothing — every mode is chance |
+| disruption | `withhold_thin`, decisively: 25 of 25 top-25 kept on 2025 |
 
-**No measurement here shows the default is better.**  The one metric that
-unambiguously tracks ordering integrity favours changing; the rest are silent,
-ambiguous, or symmetric.
+**The default is now `GROUP_TIEBREAK = "withhold_thin"` with
+`GROUP_TIE_MIN_DIFF = 20`.**  It is the only setting tried that usually
+improves both quality measures at once, and it does so while moving almost
+nothing: on 2025 + postseason the entire top 25 survives and one team moves
+more than a single place.
 
-The default remains `point_diff` as a judgement about caution rather than a
-finding: for a ranking nobody has committed to yet, reshuffling 113 teams
-deserves a stronger case than one improved metric against one ambiguous one.
-That is a defensible reason to wait and a bad reason to stop looking.  All
-three modes are in the code so the question can be re-measured on new data
-instead of re-argued:
+That is a change of kind, not just of signal.  The other three modes argue
+about *which* evidence breaks a tie inside a group.  This one holds that a
+group separated by two points of differential has not established anything,
+and should say so rather than hand out a placing that transitive closure will
+amplify across the whole field.
+
+`"point_diff"` remains available and its measurements are preserved above and
+in `test_the_old_point_diff_default_still_measures_as_it_did`, so the change
+can be reversed or re-argued on new data:
 
 ```bash
-python head_to_head.py games_2025.csv        # 92 contradicted
-# set GROUP_TIEBREAK = "head_to_head" and re-run: 74
-# set GROUP_TIEBREAK = "head_to_head_acyclic": 86
+python head_to_head.py games_2025.csv        # 85 contradicted (default)
+# set GROUP_TIEBREAK = "point_diff"  and re-run: 92
+# set GROUP_TIEBREAK = "head_to_head":          74
+# set GROUP_TIEBREAK = "head_to_head_acyclic":  86
 ```
 
 ### A related claim that was also wrong
