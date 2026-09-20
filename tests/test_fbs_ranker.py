@@ -1231,13 +1231,12 @@ class TestCommonOpponentStrength(unittest.TestCase):
         _, strength = r._pairwise_compare("A", "B", self._cliques(r))
         self.assertEqual(strength[0], 1)
 
-    def test_teams_that_met_can_never_reach_strength_one(self):
+    def test_a_shared_opponent_puts_two_teams_that_met_in_a_group(self):
         """Playing each other plus any shared opponent IS a round-robin group.
 
         A shared opponent C completes the triangle A-B-C, so two teams that
-        met are always in a group together whenever they have a common
-        opponent at all.  The common-opponent tier is therefore structurally
-        reachable only by teams that never played.
+        met are in a group together whenever they have a common opponent at
+        all, and that group speaks before the common-opponent tier does.
         """
         r = make_ranker(
             ("B", "A", 21, 17),                       # B beats A directly
@@ -1247,6 +1246,139 @@ class TestCommonOpponentStrength(unittest.TestCase):
         self.assertTrue(any({"A", "B"} <= set(c) for c in self._cliques(r)))
         _, strength = r._pairwise_compare("A", "B", self._cliques(r))
         self.assertGreaterEqual(strength[0], 3)
+
+    def test_group_tiebreak_defaults_to_point_differential(self):
+        self.assertEqual(FBSRoundRobinRanker.GROUP_TIEBREAK, "point_diff")
+
+    def test_head_to_head_tiebreak_overrides_point_differential(self):
+        """Tied on in-group win pct, the direct result can decide instead.
+
+        A three-way cycle leaves all three teams 1-1.  Point differential
+        ranks B first (+20) and A last (-29), which contradicts A beating B.
+        With GROUP_TIEBREAK="head_to_head" the meeting decides that pair.
+        """
+        games = (("A", "B", 21, 20), ("B", "C", 21, 0), ("C", "A", 30, 0))
+        base = make_ranker(*games)
+        self.assertEqual(base._verdict_in_group("A", "B", ["A", "B", "C"])[0],
+                         1, "point diff should favour B")
+
+        tie = make_ranker(*games)
+        tie.GROUP_TIEBREAK = "head_to_head"
+        self.assertEqual(tie._verdict_in_group("A", "B", ["A", "B", "C"])[0],
+                         -1, "the meeting should favour A")
+
+    def test_head_to_head_tiebreak_ignores_a_split_series(self):
+        """A split series settles nothing, so point differential still rules."""
+        r = make_ranker(("A", "B", 21, 20), ("B", "A", 30, 0),
+                        ("B", "C", 21, 0), ("C", "A", 30, 0))
+        r.GROUP_TIEBREAK = "head_to_head"
+        self.assertIsNone(r._head_to_head_verdict("A", "B"))
+
+    def test_head_to_head_verdict_reads_the_season_series(self):
+        r = make_ranker(("A", "B", 21, 0), ("B", "A", 3, 0), ("A", "B", 7, 0))
+        self.assertEqual(r._head_to_head_verdict("A", "B"), -1)   # A wins 2-1
+        self.assertEqual(r._head_to_head_verdict("B", "A"), 1)
+        self.assertIsNone(r._head_to_head_verdict("A", "Nobody"))
+
+    def test_acyclic_tiebreak_uses_the_meeting_when_the_tied_set_is_an_order(self):
+        """Two teams tied at 2-1 in a four-team group; their meeting decides.
+
+        The tied set is just {A, B}, which cannot hold a cycle, so the
+        head-to-head result is safe to honour.  Point differential would say
+        the opposite (B is +59 inside the group, A is -18).
+        """
+        games = (("A", "B", 21, 20), ("A", "C", 21, 0), ("D", "A", 40, 0),
+                 ("B", "C", 30, 0), ("B", "D", 30, 0), ("C", "D", 30, 0))
+        group = ["A", "B", "C", "D"]
+        base = make_ranker(*games)
+        self.assertEqual(base._verdict_in_group("A", "B", group)[0], 1)
+
+        acyclic = make_ranker(*games)
+        acyclic.GROUP_TIEBREAK = "head_to_head_acyclic"
+        self.assertTrue(acyclic._tied_set_is_acyclic(group, 2 / 3))
+        self.assertEqual(acyclic._verdict_in_group("A", "B", group)[0], -1)
+
+    def test_acyclic_tiebreak_stands_aside_for_a_cycle(self):
+        """In a 3-way cycle no ordering honours every meeting, so it defers.
+
+        This is the whole point of the variant: it matches plain
+        head_to_head where the meetings agree, and plain point_diff where
+        they cannot.
+        """
+        games = (("A", "B", 21, 20), ("B", "C", 21, 0), ("C", "A", 30, 0))
+        group = ["A", "B", "C"]
+        acyclic = make_ranker(*games)
+        acyclic.GROUP_TIEBREAK = "head_to_head_acyclic"
+        self.assertFalse(acyclic._tied_set_is_acyclic(group, 0.5))
+
+        base = make_ranker(*games)
+        self.assertEqual(acyclic._verdict_in_group("A", "B", group)[0],
+                         base._verdict_in_group("A", "B", group)[0])
+
+    def test_a_tied_set_too_small_to_cycle_is_acyclic(self):
+        r = make_ranker(("A", "B", 21, 20))
+        self.assertTrue(r._tied_set_is_acyclic(["A", "B"], 1.0))
+
+    def test_a_split_series_contributes_no_arc_to_the_cycle_check(self):
+        """A and B split, so nothing points either way and no cycle closes."""
+        r = make_ranker(("A", "B", 21, 0), ("B", "A", 21, 0),
+                        ("B", "C", 21, 0), ("C", "A", 21, 0))
+        self.assertIsNone(r._head_to_head_verdict("A", "B"))
+        self.assertTrue(r._tied_set_is_acyclic(["A", "B", "C"], 0.5))
+
+    def test_the_acyclic_cache_is_dropped_when_a_game_arrives(self):
+        # Records change when a game is added, so a stale answer would be
+        # read against a different tied set -- the bug the metrics cache had.
+        r = make_ranker(("A", "B", 21, 20), ("B", "C", 21, 0), ("C", "A", 30, 0))
+        r.GROUP_TIEBREAK = "head_to_head_acyclic"
+        r._tied_set_is_acyclic(["A", "B", "C"], 0.5)
+        self.assertTrue(r._acyclic_cache)
+        r.add_game("A", "D", 21, 0)
+        self.assertFalse(r._acyclic_cache)
+
+    def test_the_tiebreak_cannot_reach_a_pair_separated_on_win_pct(self):
+        """It is a TIEbreak: a decided in-group record is never overruled."""
+        r = make_ranker(("A", "B", 21, 20), ("A", "C", 30, 0), ("B", "C", 30, 0))
+        r.GROUP_TIEBREAK = "head_to_head"
+        # A is 2-0 and B is 1-1, so win pct decides before the tiebreak runs.
+        cmp, gap, _ = r._verdict_in_group("A", "B", ["A", "B", "C"])
+        self.assertEqual(cmp, -1)
+        self.assertGreater(gap, 0.0)
+
+    def test_a_two_team_group_is_unaffected_by_the_tiebreak(self):
+        """Win pct already encodes head-to-head when the group IS the game."""
+        for mode in ("point_diff", "head_to_head"):
+            r = make_ranker(("A", "B", 21, 20))
+            r.GROUP_TIEBREAK = mode
+            self.assertEqual(r._verdict_in_group("A", "B", ["A", "B"])[0], -1)
+
+    def test_disagreeing_groups_let_a_pair_that_met_fall_through(self):
+        """Sharing a group is not the same as that group deciding anything.
+
+        This test exists because the one above was read as proving more than
+        it does.  Equally sized groups that contradict each other settle
+        nothing, so that size is skipped -- and a pair that PLAYED can fall
+        all the way past the common-opponent tier to the blend.
+
+        A beat B.  {A, B, C} says A is better (A is 2-0 inside it); {A, B, D}
+        says B is (both 1-1, and B has the point differential).  Both are size
+        3, so neither wins and the comparison drops out of the group tier
+        entirely.  Teams that met are NOT confined to strength >= 2.
+        """
+        r = make_ranker(
+            ("A", "B", 21, 20),
+            ("A", "C", 30, 0), ("C", "B", 30, 0),     # {A,B,C} favours A
+            ("D", "A", 30, 0), ("B", "D", 30, 0),     # {A,B,D} favours B
+        )
+        cliques = self._cliques(r)
+        shared = [c for c in cliques if {"A", "B"} <= set(c)]
+        self.assertEqual(sorted(len(c) for c in shared), [3, 3])
+        verdicts = {r._verdict_in_group("A", "B", c)[0] for c in shared}
+        self.assertEqual(verdicts, {-1, 1}, "the two groups must disagree")
+
+        _, strength = r._pairwise_compare("A", "B", cliques)
+        self.assertEqual(strength[0], 0,
+                         "a pair that met fell past groups AND common opponents")
 
     def test_common_opponents_outrank_the_blend(self):
         """A has the worse blended score but the better shared record.

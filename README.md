@@ -741,6 +741,322 @@ verdicts first, so a blend verdict is discarded whenever it contradicts one.
 
 ---
 
+## When a ranking is worth generating
+
+A ranking is defensible at every point in a season in the sense that it is
+built only from results already played.  That is not the same as the ranking
+being worth publishing, and it is *not* the same as the ranking agreeing with
+those results — see [Does the ranking agree with the games?](#does-the-ranking-agree-with-the-games)
+below, which measures how often it does not.  Early on the ranking is mostly
+expressing the prior rather than the season.
+
+`season_progression.py` replays a season week by week, re-ranking from scratch
+on the games played to each Monday.  Averaged over 2022-2025, mapped onto the
+2026 calendar:
+
+| CFB wk | 2026 date | min games | median | evidence % | largest group | tau | churn |
+|---|---|---|---|---|---|---|---|
+| 3 | Sep 21 | 2.0 | 3.0 | 1.7 | 2.8 | 0.443 | 18.6 |
+| 4 | Sep 28 | 3.0 | 4.0 | 2.3 | 3.0 | 0.506 | 15.6 |
+| **5** | **Oct 5** | **4.0** | 4.8 | 3.0 | 3.0 | 0.526 | 12.1 |
+| 7 | Oct 19 | 5.5 | 6.2 | 4.3 | 3.0 | 0.572 | 14.7 |
+| **9** | **Nov 2** | 6.8 | 8.0 | 6.1 | **4.0** | 0.623 | 12.1 |
+| 11 | Nov 16 | 8.8 | 9.5 | 8.1 | 4.5 | 0.674 | 14.4 |
+| 12 | Nov 23 | 9.5 | 10.5 | 9.1 | 5.0 | 0.682 | 14.5 |
+| **13** | **Nov 30** | 10.2 | 11.5 | 10.3 | **7.2** | **0.867** | 13.8 |
+| **14** | **Dec 7** | 10.8 | 12.0 | 11.0 | 8.2 | 0.965 | 6.2 |
+
+"Evidence %" is the share of pairs decided at strength 1 or above — a shared
+round-robin group, or common opponents — rather than by the blend.
+
+**Three thresholds, and they are far apart.**
+
+*Four games is the hard floor,* and it falls out of `PRIOR_GAMES = 4.0`
+directly.  Shrinkage regresses a record toward .500 by four phantom games, so
+a team with `g` games shows `g/(g+4)` of its true spread: 43% at three games,
+50% at four, 67% at eight.  Below four the prior outweighs what happened.
+Every team clears four games by CFB Week 5 in all four seasons.
+
+*But the round-robin machinery does not exist yet.*  Through Week 7 the
+largest group in the graph is **3** — a triangle, the smallest thing that
+technically round-robins.  Groups of four first appear in Week 8 or 9.  Before
+November, 95%+ of pairs fall through to the blend, which makes a Week 5
+ranking a shrunken win-percentage list with a round-robin ornament on it.
+
+*The real threshold is Week 13,* and it is a discontinuity rather than a
+slope: rivalry weekend closes the conference round-robins, the largest group
+jumps from 5.0 to 7.2, and evidence reaches ~90% of its season-end value.
+
+**Two caveats that cut against reading the table optimistically.**
+
+The `tau` column flatters late weeks, because Week 14 scores well partly by
+*being* nearly the final data.  The honest real-time signal is `churn` — mean
+positions moved since the previous week — and churn sits at 12-15 from Week 4
+through Week 12 with no decay at all.  By that measure the ranking never
+settles during a season; it just stops receiving games.
+
+**The top 25 is the last band to settle, not the first.**  Restricted to teams
+that finish in the final top 25, tau runs 0.10-0.44 through Week 9 while the
+all-teams tau is 0.23-0.62 — the tail sorts itself early because 1-9 teams are
+easy to place, while the contenders are a dense cluster that every result
+reshuffles.  The gap closes by Week 11.  Fewer than half the eventual top 25
+are within three places of their finish before Week 13, and the jump to ~23 of
+25 comes at Week **14**, not 13:
+
+| CFB wk | 2026 date | tau (top 25) | tau (all) | within ±3 of final |
+|---|---|---|---|---|
+| 5 | Oct 5 | 0.372 | 0.526 | 5.0 |
+| 9 | Nov 2 | 0.412 | 0.623 | 5.0 |
+| 12 | Nov 23 | 0.645 | 0.682 | 10.8 |
+| **13** | **Nov 30** | 0.838 | 0.867 | **16.2** |
+| **14** | **Dec 7** | 0.895 | 0.965 | **23.2** |
+
+2024 is the caution: top-25 tau *fell* to 0.69 at Week 14, because conference
+championship weekend can scramble the top rather than settle it.
+
+**In short:** do not generate before Week 5, treat Weeks 5-8 as directional
+only, and expect the first ranking worth standing behind at Week 13 — Week 14
+if the top 25 is what you care about.
+
+```bash
+python season_progression.py games_2025.csv --calendar 2026
+python season_progression.py games_20*.csv --average --bands --calendar 2026
+python season_progression.py games_2025.csv --quick    # skip the slow tiers
+```
+
+The week calendar is derived rather than hardcoded: Week 1 is the weekend
+ending on Labor Day, so Week 0's Saturday is nine days before it.  That rule
+reproduces the opening Saturday of 2022-2025 exactly, and a test asserts it
+against the data files.
+
+---
+
+## Does the ranking agree with the games?
+
+**It usually does, but not always, and the exceptions are not rare.**  Across
+every season in this repository the final ranking places the loser of a
+head-to-head series *above* the winner in **12% to 17% of decided pairs**:
+
+| season | decided series | contradicted | group ranked them the other way | verdict overridden |
+|---|---|---|---|---|
+| 2022 | 726 | 120 (16.5%) | 88 | 32 |
+| 2023 | 746 | 111 (14.9%) | 83 | 28 |
+| 2024 | 746 | 104 (13.9%) | 78 | 26 |
+| 2025 | 750 | 92 (12.3%) | 65 | 27 |
+| 2025 + postseason | 789 | 105 (13.3%) | 69 | 36 |
+
+A "decided" series is one a team won; pairs that split a series are counted
+separately, since there is no single result to contradict.
+
+This is a consequence of the tier hierarchy rather than a defect, but it was
+asserted in this README as impossible until `head_to_head.py` was written to
+check it.  **Two different mechanisms produce it, and they would need
+different fixes.**
+
+### The group ranked them the other way (the larger share)
+
+Inside a shared round-robin group, `_verdict_in_group` compares *in-group win
+percentage*, then *in-group point differential*.  It never looks at the
+head-to-head result.  A three-way cycle leaves all three teams 1-1, so point
+differential decides — and it can favour the team that lost the meeting:
+
+> Rice beat Louisiana 14-12.  In their three-team group with Texas State both
+> finished 1-1, so point differential broke the tie: Louisiana at +1 against
+> Rice's −29.  Louisiana finishes **#76**, Rice **#99**.
+
+The code comment says this is deliberate, and it is solving a real problem —
+raw head-to-head is not transitive, and a cycle has to break somewhere.  What
+had never been measured is the price: 65 to 88 reversed results a season.
+
+### The verdict was overridden (the smaller share)
+
+Here the comparison *does* favour the winner, and ranked pairs discards it
+because a chain of larger-group verdicts already implies the opposite.  This
+is the documented tier hierarchy working exactly as designed.
+
+**Interconference games are structurally the most fragile verdicts in the
+system.**  Two teams with no common opponent share no triangle, so the game
+between them is its own entire group — strength 2, the weakest group strength
+there is.  Of the 46 postseason matchups in 2025, **19 produced only a
+strength-2 verdict**, which is why the reversals cluster in bowls:
+
+> Old Dominion beat South Florida 24-10.  The pairwise verdict correctly
+> favours Old Dominion, at strength 2.  This chain, every link stronger,
+> overrides it:
+>
+> South Florida > Memphis `[6]` > Troy `[3]` > Arkansas State `[7]` >
+> Georgia Southern `[4]` > Old Dominion `[7]`
+>
+> Old Dominion finishes **#84**, South Florida **#16**.
+
+Restricted to the 2025 postseason alone, 8 of 44 decided series are
+contradicted (18.2%) — and 6 of those 8 are this mechanism.
+
+### Would a head-to-head tiebreak fix it?
+
+`GROUP_TIEBREAK` selects what breaks a tie inside a group when two members
+have the same in-group win percentage.  `"point_diff"` (the default) uses
+in-group point differential.  `"head_to_head"` consults the meeting between
+the two teams.  `"head_to_head_acyclic"` consults it only where the tied
+teams' results among themselves contain no cycle.
+
+**The measurements below are split into two kinds, because they are not the
+same kind of evidence.**  A *quality measure* is a property of one ranking and
+can say one is better.  A *difference measure* compares two rankings and is
+symmetric — it says only that they disagree.  Reporting the second as though
+it were the first is how a comparison ends up arguing for whatever it started
+from.
+
+#### First, the floor
+
+A season's results are not a consistent ordering.  2025 alone contains **91
+three-way cycles** — A beat B, B beat C, C beat A — and no total order can
+honour all three.  Searching for the ordering that contradicts the fewest
+results at all (insertion local search) gives a hard floor:
+
+| season | decided | point_diff | head_to_head | acyclic | **floor** | 3-cycles |
+|---|---|---|---|---|---|---|
+| 2022 | 726 | 120 | 105 | 112 | **88** | 137 |
+| 2023 | 746 | 111 | 90 | 95 | **78** | 115 |
+| 2024 | 746 | 104 | 91 | 95 | **74** | 117 |
+| 2025 | 750 | 92 | 74 | 86 | **64** | 91 |
+
+The default already sits within about 30 of the best any ordering achieves.
+Only 28-33 contradictions a season are available to remove at all.
+
+#### Quality measures
+
+**Head-to-head contradictions** (above) is the one that tracks the goal
+directly, and `head_to_head` wins it in every season — 13 to 21 fewer, about
+half the available headroom.  `acyclic` takes 6 to 16.
+
+**Record inversions** — pairs where the lower-ranked team has the better
+overall win percentage by more than .15:
+
+| season | point_diff | head_to_head | acyclic |
+|---|---|---|---|
+| 2022 | 392 | 741 | 479 |
+| 2023 | 503 | 693 | **489** |
+| 2024 | 635 | 601 | **596** |
+| 2025 | 617 | 780 | 727 |
+
+Read this one carefully.  It measures agreement with plain win-loss records —
+but the whole premise of this ranker is that a group verdict *should* outrank
+a record, so a higher count can mean the ranking is doing its job harder
+rather than worse.  **The direction of this metric is ambiguous, not just its
+absolute level.**  It is reported because a reader of the rankings notices
+disagreement with records immediately, which makes it a measure of how much
+explaining the output needs — not of whether the output is right.
+
+**Out-of-sample prediction** is the only criterion here that does not reduce
+to a comparison against the current answer.  Rank on the regular season, then
+ask who won the bowl.  Across 176 postseason games, 2022-2025:
+
+| mode | correct | accuracy (95% CI) |
+|---|---|---|
+| point_diff | 88/176 | 50.0%  ±7.4 |
+| head_to_head | 94/176 | 53.4%  ±7.4 |
+| head_to_head_acyclic | 88/176 | 50.0%  ±7.4 |
+
+All three are chance.  **This criterion is silent** — six games over four
+seasons separates the best from the worst, well inside the interval.
+
+#### Difference measures (these are not evidence)
+
+| season | teams moved (h2h / acyclic) | median shift | max shift | top 25 kept |
+|---|---|---|---|---|
+| 2022 | 124 / 123 | 8 / 14 | 100 / 76 | 20 / 22 |
+| 2023 | 117 / 108 | 8 / 1 | 69 / 28 | 23 / 24 |
+| 2024 | 112 / 109 | 6 / 4 | 76 / 69 | 22 / 21 |
+| 2025 | 113 / 113 | 12 / 4 | 57 / 77 | 16 / 20 |
+
+**Every number in this table is symmetric.**  Measured from the head-to-head
+ranking toward `point_diff` it is identical — 113 teams moved, median 12, top
+25 keeps 16.  A figure that gives the same answer in both directions cannot
+say which ranking is better, only that the two differ.  If the tiebreak is an
+improvement then the movement *is* the improvement.
+
+What the table does measure is **disruption**, which is a real practical
+concern — a ranking that reshuffles 113 teams on a parameter change is harder
+to stand behind, and people notice their team dropping 40 places.  That is an
+argument about confidence and presentation, not about correctness, and it is
+listed separately here so it cannot be mistaken for one.
+
+#### Where the gain actually comes from
+
+The comment on the point-differential tiebreak justified it as avoiding "the
+non-transitivity that raw head-to-head creates in 3-way cycles."  That is
+backwards.  Splitting contradictions by whether a result sits inside a cycle:
+
+| season | point_diff | head_to_head | acyclic |
+|---|---|---|---|
+| 2022 | 100 / 20 | **81** / 24 | 91 / 21 |
+| 2023 | 90 / 21 | **63** / 27 | 74 / 21 |
+| 2024 | 88 / 16 | **67** / 24 | 76 / 19 |
+| 2025 | 71 / 21 | **49** / 25 | 62 / 24 |
+
+*(inside a 3-cycle / outside one)*
+
+The entire improvement is *inside* the cycles, and head-to-head is slightly
+worse outside them.  Any ordering must break at least one result per cycle;
+consulting the meeting breaks closer to that minimum, while point differential
+breaks more than it needs to.
+
+This also explains why `head_to_head_acyclic` captures **less** of the gain
+rather than more: it is defined to stand aside exactly where the gain lives.
+It still improves on the default because a result can sit in a global 3-cycle
+while the tied set inside a particular group is acyclic — the two overlap
+only partly.
+
+#### What the evidence supports
+
+| criterion | favours |
+|---|---|
+| head-to-head contradictions | `head_to_head`, clearly |
+| record inversions | mixed, and ambiguous in direction |
+| out-of-sample prediction | nothing — all three are chance |
+| disruption | `point_diff`, by being the incumbent |
+
+**No measurement here shows the default is better.**  The one metric that
+unambiguously tracks ordering integrity favours changing; the rest are silent,
+ambiguous, or symmetric.
+
+The default remains `point_diff` as a judgement about caution rather than a
+finding: for a ranking nobody has committed to yet, reshuffling 113 teams
+deserves a stronger case than one improved metric against one ambiguous one.
+That is a defensible reason to wait and a bad reason to stop looking.  All
+three modes are in the code so the question can be re-measured on new data
+instead of re-argued:
+
+```bash
+python head_to_head.py games_2025.csv        # 92 contradicted
+# set GROUP_TIEBREAK = "head_to_head" and re-run: 74
+# set GROUP_TIEBREAK = "head_to_head_acyclic": 86
+```
+
+### A related claim that was also wrong
+
+Two teams that played each other were documented as unable to fall below
+strength 2, on the reasoning that any shared opponent completes a triangle.
+Sharing a group is not the same as that group deciding anything: when equally
+sized groups contradict each other, that size settles nothing and is skipped.
+In 2025, California and SMU played, sat in two disagreeing four-team groups,
+and fell all the way to **strength 0** — decided by the blend despite having
+met on the field.  `test_disagreeing_groups_let_a_pair_that_met_fall_through`
+now pins this.
+
+```bash
+python head_to_head.py games_2025_both.csv
+python head_to_head.py games_20*.csv --list 15
+python head_to_head.py games_2025_both.csv --since 2025-12-14   # bowls only
+python head_to_head.py games_2025.csv --max-pct 15              # regression guard
+```
+
+`--max-pct` exits non-zero when the rate goes above a limit, so this can guard
+a change rather than merely describe one.
+
+---
+
 ## Conflicts between groups
 
 A worked example, as covered by `TestConflictingVerdicts`:
@@ -967,6 +1283,16 @@ of this file shows the latest result.
   given margin (including a winless team not dividing by zero), the influence
   figures, an undifferentiated field yielding no ratio rather than a huge one,
   and the CLI rejecting malformed weights
+- `season_progression.py`: the Labor Day week calendar checked against every
+  data file's opening Saturday, a Saturday slate never split across two
+  cutoffs, evidence tiers covering each pair exactly once, the clique index
+  agreeing with an unindexed comparison, and Kendall tau-b matching published
+  values on tie-heavy cases
+- `head_to_head.py`: both mechanisms that put a winner below the team it beat
+  (a cycle broken by point differential, and a strength-2 verdict discarded by
+  a chain of larger groups), split series counted as neither, the --since
+  filter narrowing what is audited without narrowing what the ranking saw, and
+  the per-season counts pinned so a change has to move them deliberately
 - `fetch_games.py` classification: only an explicit `fbs` counting as FBS, an
   unclassified team not slipping through as one, case and padding ignored, and
   a response with no classification fields at all failing loudly rather than

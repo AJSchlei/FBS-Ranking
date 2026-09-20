@@ -51,7 +51,7 @@ CSV format (input):
 import csv
 import sys
 import argparse
-from itertools import groupby
+from itertools import combinations, groupby
 
 import networkx as nx
 
@@ -153,6 +153,17 @@ class FBSRoundRobinRanker:
     # differential; "point_diff" reverses that.  See the README.
     STRENGTH_ZERO_ORDER = "blend"
 
+    # What breaks a tie inside a round-robin group when two members have the
+    # same in-group win percentage.  "point_diff" (the default) uses in-group
+    # point differential; "head_to_head" consults the result between the two
+    # teams first and falls back to point differential when they split.
+    #
+    # Every pair inside a group has played -- that is what a clique means --
+    # so the head-to-head result is always available.  It is NOT transitive,
+    # though: a three-way cycle leaves all three teams 1-1 and pointing at
+    # each other, and no total order can honour all three.  See the README.
+    GROUP_TIEBREAK = "point_diff"
+
     #: What to do when a pair of teams meets more than once.
     #: "combine" (default) counts every meeting, so a split season series is a
     #: 1-1 record with points from both games; "error" refuses the dataset;
@@ -175,6 +186,7 @@ class FBSRoundRobinRanker:
         # Cache for the derived opponent metrics; cleared whenever a game is
         # added, rebuilt on first use.
         self._metrics_cache = None
+        self._acyclic_cache = {}
         #: Names of every unranked opponent seen, for reporting.
         self.unranked_opponents: set = set()
         #: Opponents some rows marked ranked and others unranked, which
@@ -279,6 +291,7 @@ class FBSRoundRobinRanker:
         self._unranked_games.setdefault(team, []).append(
             (opponent, points_for, points_against))
         self._metrics_cache = None
+        self._acyclic_cache = {}
 
     def get_unranked_results(self, team: str) -> list:
         """Games this team played against unranked opponents.
@@ -317,6 +330,7 @@ class FBSRoundRobinRanker:
         self.teams.add(team_b)
         self._game_map.setdefault(key, []).append(value)
         self._metrics_cache = None
+        self._acyclic_cache = {}
 
     # ------------------------------------------------------------------
     # Game result helpers
@@ -453,13 +467,85 @@ class FBSRoundRobinRanker:
         if wpc_gap > 1e-9:
             return (-1 if wpc_a > wpc_b else 1), wpc_gap, diff_gap
 
-        # Tied on win pct: compare point differential within this group.
-        # (Using point diff avoids the non-transitivity that raw h2h creates
-        # in 3-way cycles; for 2-team groups win pct already encodes h2h.)
+        # Tied on win pct.  Point differential is the default because it is
+        # transitive; head-to-head is not, and in a 3-way cycle no ordering
+        # can satisfy every meeting.  For 2-team groups win pct already
+        # encodes head-to-head, so this only matters in groups of 3 or more.
+        if self.GROUP_TIEBREAK in ("head_to_head", "head_to_head_acyclic"):
+            consult = (self.GROUP_TIEBREAK == "head_to_head"
+                       or self._tied_set_is_acyclic(group, wpc_a))
+            if consult:
+                direct = self._head_to_head_verdict(team_a, team_b)
+                if direct is not None:
+                    return direct, 0.0, diff_gap
+
         if diff_a != diff_b:
             return (-1 if diff_a > diff_b else 1), 0.0, diff_gap
 
         return None
+
+    def _tied_set_is_acyclic(self, group, win_pct_value) -> bool:
+        """Do the teams tied at *win_pct_value* inside *group* form an order?
+
+        Everyone in a group has played everyone else, so the teams tied on
+        in-group win percentage form a complete sub-tournament.  An acyclic
+        tournament IS a total order, so where this returns True the meetings
+        among the tied teams can be honoured all at once; where it returns
+        False some result has to be broken whatever we do, and the caller
+        falls back to point differential.
+
+        The arcs come from season series, not from the group, so the answer
+        depends only on which teams are tied and can be cached on that set.
+        """
+        members = tuple(sorted(
+            team for team in group
+            if abs(self._win_pct(*self._record_in_group(team, group)[:2])
+                   - win_pct_value) <= 1e-9))
+        if len(members) < 3:
+            return True                  # nothing smaller can hold a cycle
+        cached = self._acyclic_cache.get(members)
+        if cached is not None:
+            return cached
+
+        after = {team: set() for team in members}
+        incoming = {team: 0 for team in members}
+        for team_a, team_b in combinations(members, 2):
+            verdict = self._head_to_head_verdict(team_a, team_b)
+            if verdict is None:
+                continue                 # split series: no arc either way
+            winner, loser = ((team_a, team_b) if verdict < 0
+                             else (team_b, team_a))
+            if loser not in after[winner]:
+                after[winner].add(loser)
+                incoming[loser] += 1
+
+        # Kahn's algorithm: an acyclic graph can be emptied by repeatedly
+        # removing a team nobody beat.
+        ready = [t for t in members if incoming[t] == 0]
+        removed = 0
+        while ready:
+            team = ready.pop()
+            removed += 1
+            for loser in after[team]:
+                incoming[loser] -= 1
+                if incoming[loser] == 0:
+                    ready.append(loser)
+        result = removed == len(members)
+        self._acyclic_cache[members] = result
+        return result
+
+    def _head_to_head_verdict(self, team_a: str, team_b: str):
+        """-1 if team_a won the season series, 1 if team_b did, else None.
+
+        None covers both "never played" and a split series: neither settles
+        anything, so the caller falls through to its next tiebreak.
+        """
+        results = self.get_results(team_a, team_b)
+        wins_a = sum(1 for score_a, score_b in results if score_a > score_b)
+        wins_b = sum(1 for score_a, score_b in results if score_b > score_a)
+        if wins_a == wins_b:
+            return None
+        return -1 if wins_a > wins_b else 1
 
     # ------------------------------------------------------------------
     # Common opponents (strength 1)
