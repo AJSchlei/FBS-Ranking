@@ -894,108 +894,144 @@ contradicted (18.2%) — and 6 of those 8 are this mechanism.
 
 ### Would a head-to-head tiebreak fix it?
 
-Partly, and the price is steep.  `GROUP_TIEBREAK = "head_to_head"` consults
-the meeting between two teams before falling back to point differential.  It
-is off by default; these are the measurements that decided that.
+`GROUP_TIEBREAK` selects what breaks a tie inside a group when two members
+have the same in-group win percentage.  `"point_diff"` (the default) uses
+in-group point differential.  `"head_to_head"` consults the meeting between
+the two teams.  `"head_to_head_acyclic"` consults it only where the tied
+teams' results among themselves contain no cycle.
 
-**First, the floor.**  A season's results are not a consistent ordering.
-2025 alone contains **91 three-way cycles** — A beat B, B beat C, C beat A —
-and no total order can honour all three.  Searching for the ordering that
-contradicts the fewest results at all gives:
+**The measurements below are split into two kinds, because they are not the
+same kind of evidence.**  A *quality measure* is a property of one ranking and
+can say one is better.  A *difference measure* compares two rankings and is
+symmetric — it says only that they disagree.  Reporting the second as though
+it were the first is how a comparison ends up arguing for whatever it started
+from.
 
-| season | decided | current | head-to-head | floor | 3-cycles |
-|---|---|---|---|---|---|
-| 2022 | 726 | 120 | 105 | **88** | 137 |
-| 2023 | 746 | 111 | 90 | **78** | 115 |
-| 2024 | 746 | 104 | 91 | **74** | 117 |
-| 2025 | 750 | 92 | 74 | **64** | 91 |
+#### First, the floor
 
-**The current ranker is already within about 30 of the best any ordering can
-do.** Only 28-33 contradictions a season are available to remove, and the
-tiebreak takes 13-21 of them — roughly half the headroom.
+A season's results are not a consistent ordering.  2025 alone contains **91
+three-way cycles** — A beat B, B beat C, C beat A — and no total order can
+honour all three.  Searching for the ordering that contradicts the fewest
+results at all (insertion local search) gives a hard floor:
 
-**What it costs:**
+| season | decided | point_diff | head_to_head | acyclic | **floor** | 3-cycles |
+|---|---|---|---|---|---|---|
+| 2022 | 726 | 120 | 105 | 112 | **88** | 137 |
+| 2023 | 746 | 111 | 90 | 95 | **78** | 115 |
+| 2024 | 746 | 104 | 91 | 95 | **74** | 117 |
+| 2025 | 750 | 92 | 74 | 86 | **64** | 91 |
 
-| season | record inversions | teams moved | median shift | max shift | top 25 kept |
-|---|---|---|---|---|---|
-| 2022 | 392 → 741 (**+349**) | 124 | 8 | 100 | 20/25 |
-| 2023 | 503 → 693 (**+190**) | 117 | 8 | 69 | 23/25 |
-| 2024 | 635 → 601 (−34) | 112 | 6 | 76 | 22/25 |
-| 2025 | 617 → 780 (**+163**) | 113 | 12 | 57 | 16/25 |
+The default already sits within about 30 of the best any ordering achieves.
+Only 28-33 contradictions a season are available to remove at all.
 
-Record inversions rise sharply in three of four seasons — 2022 nearly doubles
-— and the ranking is heavily reshuffled, with a season's top 25 keeping as few
-as 16 of its 25 members.  So the trade is: **honour about 15 more results,
-look considerably less like the records while doing it.**
+#### Quality measures
 
-**Where the gain actually comes from is the surprise.**  The existing code
-comment justifies point differential as avoiding "the non-transitivity that
-raw head-to-head creates in 3-way cycles."  That is exactly backwards —
-splitting 2025's contradictions by whether a result sits inside a cycle:
+**Head-to-head contradictions** (above) is the one that tracks the goal
+directly, and `head_to_head` wins it in every season — 13 to 21 fewer, about
+half the available headroom.  `acyclic` takes 6 to 16.
 
-| | inside a 3-cycle | outside |
-|---|---|---|
-| current | 71 | 21 |
-| head-to-head | **49** (−22) | 25 (+4) |
+**Record inversions** — pairs where the lower-ranked team has the better
+overall win percentage by more than .15:
 
-Every bit of the improvement is *inside* the cycles, and the tiebreak is
-slightly **worse** outside them.  Any ordering must break at least one result
-per cycle; consulting the meeting breaks closer to that minimum, while point
-differential breaks more than it needs to.  The 2024 and 2022 splits agree
-(−21/+8 and −19/+4).
-
-**A third option, and it does not do what I expected.**
-`GROUP_TIEBREAK = "head_to_head_acyclic"` consults the meeting only when the
-tied teams' results among *themselves* contain no cycle — the idea being to
-keep the gain and drop the churn.  All three modes, against the floor:
-
-| season | point_diff | head_to_head | head_to_head_acyclic | floor |
-|---|---|---|---|---|
-| 2022 | 120 | **105** | 112 | 88 |
-| 2023 | 111 | **90** | 95 | 78 |
-| 2024 | 104 | **91** | 95 | 74 |
-| 2025 | 92 | **74** | 86 | 64 |
-
-It captures *less* of the gain, not more — and the reason is obvious in
-hindsight.  The improvement lives inside the cycles, and this variant is
-defined to stand aside exactly there:
-
-| season | point_diff | head_to_head | head_to_head_acyclic |
+| season | point_diff | head_to_head | acyclic |
 |---|---|---|---|
-| 2022 | 100 / 20 | 81 / 24 | 91 / 21 |
-| 2023 | 90 / 21 | 63 / 27 | 74 / 21 |
-| 2024 | 88 / 16 | 67 / 24 | 76 / 19 |
-| 2025 | 71 / 21 | 49 / 25 | 62 / 24 |
+| 2022 | 392 | 741 | 479 |
+| 2023 | 503 | 693 | **489** |
+| 2024 | 635 | 601 | **596** |
+| 2025 | 617 | 780 | 727 |
 
-*(contradictions inside a 3-cycle / outside one)*
+Read this one carefully.  It measures agreement with plain win-loss records —
+but the whole premise of this ranker is that a group verdict *should* outrank
+a record, so a higher count can mean the ranking is doing its job harder
+rather than worse.  **The direction of this metric is ambiguous, not just its
+absolute level.**  It is reported because a reader of the rankings notices
+disagreement with records immediately, which makes it a measure of how much
+explaining the output needs — not of whether the output is right.
 
-**But it is far cheaper, and that makes it a real option rather than a dead
-end.**  It is gentler on records and on the board:
+**Out-of-sample prediction** is the only criterion here that does not reduce
+to a comparison against the current answer.  Rank on the regular season, then
+ask who won the bowl.  Across 176 postseason games, 2022-2025:
 
-| season | inversions: h2h | inversions: acyclic | median shift h2h / acyclic | top 25 kept h2h / acyclic |
+| mode | correct | accuracy (95% CI) |
+|---|---|---|
+| point_diff | 88/176 | 50.0%  ±7.4 |
+| head_to_head | 94/176 | 53.4%  ±7.4 |
+| head_to_head_acyclic | 88/176 | 50.0%  ±7.4 |
+
+All three are chance.  **This criterion is silent** — six games over four
+seasons separates the best from the worst, well inside the interval.
+
+#### Difference measures (these are not evidence)
+
+| season | teams moved (h2h / acyclic) | median shift | max shift | top 25 kept |
 |---|---|---|---|---|
-| 2022 | 392 → 741 (+349) | 392 → 479 (**+87**) | 8 / 14 | 20 / **22** |
-| 2023 | 503 → 693 (+190) | 503 → 489 (**−14**) | 8 / **1** | 23 / **24** |
-| 2024 | 635 → 601 (−34) | 635 → 596 (**−39**) | 6 / **4** | **22** / 21 |
-| 2025 | 617 → 780 (+163) | 617 → 727 (**+110**) | 12 / **4** | 16 / **20** |
+| 2022 | 124 / 123 | 8 / 14 | 100 / 76 | 20 / 22 |
+| 2023 | 117 / 108 | 8 / 1 | 69 / 28 | 23 / 24 |
+| 2024 | 112 / 109 | 6 / 4 | 76 / 69 | 22 / 21 |
+| 2025 | 113 / 113 | 12 / 4 | 57 / 77 | 16 / 20 |
 
-In 2023 the acyclic variant removes 16 contradictions **and** 14 record
-inversions — a free improvement on both counts.  2024 is free on both for
-either mode.  2022 and 2025 still cost something, but a third to a quarter of
-what plain head-to-head costs.
+**Every number in this table is symmetric.**  Measured from the head-to-head
+ranking toward `point_diff` it is identical — 113 teams moved, median 12, top
+25 keeps 16.  A figure that gives the same answer in both directions cannot
+say which ranking is better, only that the two differ.  If the tiebreak is an
+improvement then the movement *is* the improvement.
 
-So the three modes are points on a curve rather than a right answer: bigger
-correction and bigger disruption, or half the correction for a fraction of the
-price.
+What the table does measure is **disruption**, which is a real practical
+concern — a ranking that reshuffles 113 teams on a parameter change is harder
+to stand behind, and people notice their team dropping 40 places.  That is an
+argument about confidence and presentation, not about correctness, and it is
+listed separately here so it cannot be mistaken for one.
 
-**Why it stays off by default:** the gain is real but small against a floor
-that can never be reached, and it is paid for in a metric — agreement with
-records — that a reader of the rankings sees immediately.  The knob is here so
-the choice can be re-measured rather than argued:
+#### Where the gain actually comes from
+
+The comment on the point-differential tiebreak justified it as avoiding "the
+non-transitivity that raw head-to-head creates in 3-way cycles."  That is
+backwards.  Splitting contradictions by whether a result sits inside a cycle:
+
+| season | point_diff | head_to_head | acyclic |
+|---|---|---|---|
+| 2022 | 100 / 20 | **81** / 24 | 91 / 21 |
+| 2023 | 90 / 21 | **63** / 27 | 74 / 21 |
+| 2024 | 88 / 16 | **67** / 24 | 76 / 19 |
+| 2025 | 71 / 21 | **49** / 25 | 62 / 24 |
+
+*(inside a 3-cycle / outside one)*
+
+The entire improvement is *inside* the cycles, and head-to-head is slightly
+worse outside them.  Any ordering must break at least one result per cycle;
+consulting the meeting breaks closer to that minimum, while point differential
+breaks more than it needs to.
+
+This also explains why `head_to_head_acyclic` captures **less** of the gain
+rather than more: it is defined to stand aside exactly where the gain lives.
+It still improves on the default because a result can sit in a global 3-cycle
+while the tied set inside a particular group is acyclic — the two overlap
+only partly.
+
+#### What the evidence supports
+
+| criterion | favours |
+|---|---|
+| head-to-head contradictions | `head_to_head`, clearly |
+| record inversions | mixed, and ambiguous in direction |
+| out-of-sample prediction | nothing — all three are chance |
+| disruption | `point_diff`, by being the incumbent |
+
+**No measurement here shows the default is better.**  The one metric that
+unambiguously tracks ordering integrity favours changing; the rest are silent,
+ambiguous, or symmetric.
+
+The default remains `point_diff` as a judgement about caution rather than a
+finding: for a ranking nobody has committed to yet, reshuffling 113 teams
+deserves a stronger case than one improved metric against one ambiguous one.
+That is a defensible reason to wait and a bad reason to stop looking.  All
+three modes are in the code so the question can be re-measured on new data
+instead of re-argued:
 
 ```bash
 python head_to_head.py games_2025.csv        # 92 contradicted
-# then set GROUP_TIEBREAK = "head_to_head" and re-run: 74
+# set GROUP_TIEBREAK = "head_to_head" and re-run: 74
+# set GROUP_TIEBREAK = "head_to_head_acyclic": 86
 ```
 
 ### A related claim that was also wrong
