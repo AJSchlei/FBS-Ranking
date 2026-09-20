@@ -1247,8 +1247,8 @@ class TestCommonOpponentStrength(unittest.TestCase):
         _, strength = r._pairwise_compare("A", "B", self._cliques(r))
         self.assertGreaterEqual(strength[0], 3)
 
-    def test_group_tiebreak_defaults_to_point_differential(self):
-        self.assertEqual(FBSRoundRobinRanker.GROUP_TIEBREAK, "point_diff")
+    def test_group_tiebreak_defaults_to_withholding_thin_ties(self):
+        self.assertEqual(FBSRoundRobinRanker.GROUP_TIEBREAK, "withhold_thin")
 
     def test_head_to_head_tiebreak_overrides_point_differential(self):
         """Tied on in-group win pct, the direct result can decide instead.

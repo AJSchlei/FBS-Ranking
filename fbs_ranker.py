@@ -168,7 +168,7 @@ class FBSRoundRobinRanker:
     # size silent, so the pair falls through to a smaller group, then common
     # opponents, then the blend -- rather than inheriting a position from a
     # margin of a point or two.
-    GROUP_TIEBREAK = "point_diff"
+    GROUP_TIEBREAK = "withhold_thin"
 
     # For GROUP_TIEBREAK="withhold_thin": the smallest in-group point
     # differential gap that may decide a tie on in-group win percentage.

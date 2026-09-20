@@ -835,15 +835,23 @@ against the data files.
 
 **It usually does, but not always, and the exceptions are not rare.**  Across
 every season in this repository the final ranking places the loser of a
-head-to-head series *above* the winner in **12% to 17% of decided pairs**:
+head-to-head series *above* the winner in **11% to 17% of decided pairs**:
 
 | season | decided series | contradicted | group ranked them the other way | verdict overridden |
 |---|---|---|---|---|
-| 2022 | 726 | 120 (16.5%) | 88 | 32 |
-| 2023 | 746 | 111 (14.9%) | 83 | 28 |
-| 2024 | 746 | 104 (13.9%) | 78 | 26 |
-| 2025 | 750 | 92 (12.3%) | 65 | 27 |
-| 2025 + postseason | 789 | 105 (13.3%) | 69 | 36 |
+| 2022 | 726 | 126 (17.4%) | 89 | 37 |
+| 2023 | 746 | 103 (13.8%) | 73 | 30 |
+| 2024 | 746 | 97 (13.0%) | 67 | 30 |
+| 2025 | 750 | 82 (10.9%) | 56 | 26 |
+| 2022 + postseason | 768 | 131 (17.1%) | 88 | 43 |
+| 2023 + postseason | 788 | 108 (13.7%) | 72 | 36 |
+| 2024 + postseason | 790 | 113 (14.3%) | 75 | 38 |
+| 2025 + postseason | 789 | 95 (12.0%) | 58 | 37 |
+
+(Under the former `point_diff` default these read 120, 111, 104, 92 and
+128, 120, 116, 105 — see
+[Would a head-to-head tiebreak fix it?](#would-a-head-to-head-tiebreak-fix-it)
+for why the default changed.)
 
 A "decided" series is one a team won; pairs that split a series are counted
 separately, since there is no single result to contradict.
@@ -895,8 +903,8 @@ contradicted (18.2%) — and 6 of those 8 are this mechanism.
 ### Would a head-to-head tiebreak fix it?
 
 `GROUP_TIEBREAK` selects what breaks a tie inside a group when two members
-have the same in-group win percentage.  `"point_diff"` (the default) uses
-in-group point differential.  `"head_to_head"` consults the meeting between
+have the same in-group win percentage.  `"point_diff"` uses in-group point
+differential; it was the default until the measurements below changed it.  `"head_to_head"` consults the meeting between
 the two teams.  `"head_to_head_acyclic"` consults it only where the tied
 teams' results among themselves contain no cycle.
 
@@ -1086,34 +1094,40 @@ and **4-0** inside a five-team group, from #23 to #8 — with everything else
 shifting by at most one place.  The other variants reshuffle 100+ teams and
 drop as many as 9 of the top 25.
 
-Note that `GROUP_TIE_MIN_DIFF` has no effect while `GROUP_TIEBREAK` is
-`"point_diff"`, which is still the default.  Setting the threshold alone does
-not change any ranking.
+`GROUP_TIE_MIN_DIFF` has no effect under any other `GROUP_TIEBREAK` setting;
+under `"point_diff"`, `"head_to_head"` or `"head_to_head_acyclic"` the
+threshold is simply unused.
 
 #### What the evidence supports
 
 | criterion | favours |
 |---|---|
-| head-to-head contradictions | `head_to_head`, clearly |
-| record inversions | mixed, and ambiguous in direction |
-| out-of-sample prediction | nothing — all three are chance |
-| disruption | `point_diff`, by being the incumbent |
+| head-to-head contradictions | `head_to_head` outright; `withhold_thin` in 6 of 8 files |
+| record inversions | `withhold_thin` in 7 of 8; `head_to_head` worse almost everywhere |
+| out-of-sample prediction | nothing — every mode is chance |
+| disruption | `withhold_thin`, decisively: 25 of 25 top-25 kept on 2025 |
 
-**No measurement here shows the default is better.**  The one metric that
-unambiguously tracks ordering integrity favours changing; the rest are silent,
-ambiguous, or symmetric.
+**The default is now `GROUP_TIEBREAK = "withhold_thin"` with
+`GROUP_TIE_MIN_DIFF = 20`.**  It is the only setting tried that usually
+improves both quality measures at once, and it does so while moving almost
+nothing: on 2025 + postseason the entire top 25 survives and one team moves
+more than a single place.
 
-The default remains `point_diff` as a judgement about caution rather than a
-finding: for a ranking nobody has committed to yet, reshuffling 113 teams
-deserves a stronger case than one improved metric against one ambiguous one.
-That is a defensible reason to wait and a bad reason to stop looking.  All
-three modes are in the code so the question can be re-measured on new data
-instead of re-argued:
+That is a change of kind, not just of signal.  The other three modes argue
+about *which* evidence breaks a tie inside a group.  This one holds that a
+group separated by two points of differential has not established anything,
+and should say so rather than hand out a placing that transitive closure will
+amplify across the whole field.
+
+`"point_diff"` remains available and its measurements are preserved above and
+in `test_the_old_point_diff_default_still_measures_as_it_did`, so the change
+can be reversed or re-argued on new data:
 
 ```bash
-python head_to_head.py games_2025.csv        # 92 contradicted
-# set GROUP_TIEBREAK = "head_to_head" and re-run: 74
-# set GROUP_TIEBREAK = "head_to_head_acyclic": 86
+python head_to_head.py games_2025.csv        # 82 contradicted (default)
+# set GROUP_TIEBREAK = "point_diff"  and re-run: 92
+# set GROUP_TIEBREAK = "head_to_head":          74
+# set GROUP_TIEBREAK = "head_to_head_acyclic":  86
 ```
 
 ### A related claim that was also wrong
