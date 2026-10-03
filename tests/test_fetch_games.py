@@ -285,6 +285,74 @@ class TestApiLayer(unittest.TestCase):
                 fetch_games.fetch_games(2025, "regular", "BAD")
         self.assertIn("401", str(ctx.exception))
 
+    def test_no_key_sends_no_authorization_header(self):
+        """Some environments authenticate for us; the key is simply absent.
+
+        Refusing to send the request would block one that succeeds. So the
+        request goes out, just without an Authorization header to forge.
+        """
+        captured = {}
+
+        def fake_urlopen(request, timeout=None):
+            captured["auth"] = request.get_header("Authorization")
+            return self._stub([fbs_game("Texas", 31, "Oklahoma", 24)])
+
+        with mock.patch.object(fetch_games.urllib.request, "urlopen", fake_urlopen):
+            games = fetch_games.fetch_games(2025, "regular")
+
+        self.assertIsNone(captured["auth"])
+        self.assertEqual(len(games), 1)
+
+    def test_a_401_without_a_key_asks_for_one(self):
+        """The API, not a guess beforehand, is what reports a key is needed."""
+        def fake_urlopen(request, timeout=None):
+            raise fetch_games.urllib.error.HTTPError(
+                request.full_url, 401, "Unauthorized", {}, None)
+
+        with mock.patch.object(fetch_games.urllib.request, "urlopen", fake_urlopen):
+            with self.assertRaises(SystemExit) as ctx:
+                fetch_games.fetch_games(2025, "regular")
+        message = str(ctx.exception)
+        self.assertIn("401", message)
+        self.assertIn("CFBD_API_KEY", message)
+        self.assertNotIn("rejected", message)   # nothing was rejected
+
+    def test_a_401_with_a_key_still_says_the_key_was_rejected(self):
+        """The two cases must not collapse into one message."""
+        def fake_urlopen(request, timeout=None):
+            raise fetch_games.urllib.error.HTTPError(
+                request.full_url, 403, "Forbidden", {}, None)
+
+        with mock.patch.object(fetch_games.urllib.request, "urlopen", fake_urlopen):
+            with self.assertRaises(SystemExit) as ctx:
+                fetch_games.fetch_games(2025, "regular", "BAD")
+        self.assertIn("rejected the key", str(ctx.exception))
+
+    def test_main_no_longer_refuses_to_start_without_a_key(self):
+        """Regression: the pre-flight guard blocked environments that work.
+
+        fetch_games.py used to exit before sending anything when it could not
+        see a key.  That made it unusable wherever the credential lives
+        outside the process, which is where platform guidance puts it.
+        """
+        out = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        out.close()
+        try:
+            def fake_urlopen(request, timeout=None):
+                self.assertIsNone(request.get_header("Authorization"))
+                return self._stub([fbs_game("Texas", 31, "Oklahoma", 24)])
+
+            env = {k: v for k, v in os.environ.items() if k != "CFBD_API_KEY"}
+            with mock.patch.object(fetch_games.urllib.request, "urlopen",
+                                   fake_urlopen), \
+                    mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch.object(sys, "stderr", io.StringIO()):
+                fetch_games.main(["--year", "2025", "--out", out.name])
+            with open(out.name, newline="", encoding="utf-8") as fh:
+                self.assertEqual(len(list(csv.DictReader(fh))), 1)
+        finally:
+            os.unlink(out.name)
+
     def test_default_writes_both_meetings_of_a_rematch(self):
         """The fetcher's default must match the ranker's: keep every meeting.
 
