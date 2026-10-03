@@ -14,9 +14,13 @@ the FCS team stays out of the game graph and out of the standings.
 
 Games between two non-FBS teams are dropped; neither side would be ranked.
 
-An API key is required (free, from https://collegefootballdata.com/key).  Pass
-it with --api-key or, better, put it in the CFBD_API_KEY environment variable
-so it stays out of your shell history:
+An API key is normally required (free, from
+https://collegefootballdata.com/key).  Pass it with --api-key or, better, put
+it in the CFBD_API_KEY environment variable so it stays out of your shell
+history.  If no key is configured the request is still attempted, because
+some environments authenticate on the caller's behalf and the key is not
+visible to this process; the API's own 401/403 is what reports a missing
+key, not a guess made before asking:
 
     export CFBD_API_KEY=...
     python fetch_games.py --year 2025 --out games_2025.csv
@@ -45,29 +49,42 @@ API_URL = "https://api.collegefootballdata.com/games"
 TIMEOUT = 60
 
 
-def fetch_games(year, season_type, api_key, url=API_URL, timeout=TIMEOUT):
-    """Return the raw list of game dicts for a season from the CFBD API."""
+def fetch_games(year, season_type, api_key=None, url=API_URL, timeout=TIMEOUT):
+    """Return the raw list of game dicts for a season from the CFBD API.
+
+    *api_key* may be None.  Some environments authenticate outbound requests
+    on the caller's behalf -- a proxy that attaches the credential, or a host
+    where the endpoint needs none -- and in those the key is genuinely absent
+    from the process.  Rather than guess which situation it is in, this sends
+    the request and lets the API answer: a 401 or 403 is what says a key was
+    needed, and only then is one demanded.
+    """
     query = urllib.parse.urlencode({
         "year": year,
         "seasonType": season_type,
         "division": "fbs",
     })
-    request = urllib.request.Request(
-        f"{url}?{query}",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Accept": "application/json",
-            "User-Agent": "fbs-ranking/1.0",
-        },
-    )
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "fbs-ranking/1.0",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request = urllib.request.Request(f"{url}?{query}", headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
+            if api_key:
+                raise SystemExit(
+                    f"API rejected the key ({exc.code}). Check CFBD_API_KEY, or "
+                    f"get a free key at https://collegefootballdata.com/key"
+                ) from None
             raise SystemExit(
-                f"API rejected the key ({exc.code}). Check CFBD_API_KEY, or get "
-                f"a free key at https://collegefootballdata.com/key"
+                f"API requires a key ({exc.code}) and none was supplied. Set "
+                f"CFBD_API_KEY or pass --api-key. Free keys: "
+                f"https://collegefootballdata.com/key"
             ) from None
         raise SystemExit(f"API request failed: HTTP {exc.code} {exc.reason}") from None
     except urllib.error.URLError as exc:
@@ -226,10 +243,13 @@ def main(argv=None):
 
     api_key = args.api_key or os.environ.get("CFBD_API_KEY")
     if not api_key:
-        parser.error(
-            "no API key: set CFBD_API_KEY or pass --api-key. "
-            "Free keys: https://collegefootballdata.com/key"
-        )
+        # Not an error on its own.  Where the environment stores the
+        # credential outside the process -- a proxy that attaches it, or an
+        # endpoint that needs none -- refusing here would block a request
+        # that would have succeeded.  The API decides, not this guess; a 401
+        # or 403 comes back as a clear "set CFBD_API_KEY or pass --api-key".
+        print("No CFBD_API_KEY found; sending unauthenticated requests. "
+              "If the API needs a key it will say so.", file=sys.stderr)
 
     season_types = ["regular", "postseason"] if args.season_type == "both" \
         else [args.season_type]
