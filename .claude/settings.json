@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python fetch_games.py:*)",
+      "Bash(python season_progression.py:*)",
+      "Bash(python fbs_ranker.py:*)",
+      "Bash(pip install -r requirements.txt)"
+    ]
+  }
+}
